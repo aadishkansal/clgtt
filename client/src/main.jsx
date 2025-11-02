@@ -1,0 +1,39 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+
+// 🔍 ADD DEBUG CODE
+import "./debug.js";
+
+import App from "./App";
+import { AuthProvider } from "./context/AuthProvider"; // ✅ CHANGE HERE
+import "./index.css";
+import "react-toastify/dist/ReactToastify.css";
+
+console.log(
+  "%c✅ main.jsx loaded",
+  "color: green; font-size: 14px; font-weight: bold;"
+);
+
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={true}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="light"
+        />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>
+);
