@@ -23,9 +23,7 @@ export const SubjectList = ({ onEdit }) => {
     try {
       setLoading(true);
       const response = await api.get("/subjects");
-
-      const subjectData = response.data.data || response.data.subjects || [];
-      setSubjects(subjectData);
+      setSubjects(response.data.data || response.data.subjects || []);
     } catch (error) {
       toast.error(handleApiError(error));
       setSubjects([]);
@@ -47,16 +45,10 @@ export const SubjectList = ({ onEdit }) => {
   };
 
   const getTotalCredits = (subject) => {
-    if (
-      subject.creditDistribution &&
-      typeof subject.creditDistribution === "object"
-    ) {
-      return Object.values(subject.creditDistribution).reduce(
-        (a, b) => a + b,
-        0
-      );
-    }
-    return subject.creditHours || 0;
+    const l = parseInt(subject.lectureCredits) || 0;
+    const t = parseInt(subject.tutorialCredits) || 0;
+    const p = parseInt(subject.practicalCredits) || 0;
+    return l + t + p;
   };
 
   if (loading) return <Loader />;
@@ -100,7 +92,9 @@ export const SubjectList = ({ onEdit }) => {
             <th className="px-6 py-4 text-left font-semibold">Year</th>
             <th className="px-6 py-4 text-left font-semibold">Semester</th>
             <th className="px-6 py-4 text-left font-semibold">Type(s)</th>
-            <th className="px-6 py-4 text-left font-semibold">Credits</th>
+            <th className="px-6 py-4 text-left font-semibold">
+              Credits (L-T-P)
+            </th>
             <th className="px-6 py-4 text-center font-semibold">Actions</th>
           </tr>
         </thead>
@@ -139,20 +133,19 @@ export const SubjectList = ({ onEdit }) => {
               <td className="px-6 py-4">
                 <div className="text-sm">
                   <div className="font-semibold">
-                    {getTotalCredits(subject)} total
+                    {getTotalCredits(subject)} total credits
                   </div>
-                  {subject.creditDistribution &&
-                    typeof subject.creditDistribution === "object" && (
-                      <div className="text-gray-600 text-xs mt-1">
-                        {Object.entries(subject.creditDistribution).map(
-                          ([type, credits]) => (
-                            <div key={type}>
-                              {type}: {credits}
-                            </div>
-                          )
-                        )}
-                      </div>
+                  <div className="text-gray-600 text-xs mt-1">
+                    {subject.lectureCredits > 0 && (
+                      <div>L: {subject.lectureCredits}</div>
                     )}
+                    {subject.tutorialCredits > 0 && (
+                      <div>T: {subject.tutorialCredits}</div>
+                    )}
+                    {subject.practicalCredits > 0 && (
+                      <div>P: {subject.practicalCredits}</div>
+                    )}
+                  </div>
                 </div>
               </td>
               <td className="px-6 py-4 text-center">

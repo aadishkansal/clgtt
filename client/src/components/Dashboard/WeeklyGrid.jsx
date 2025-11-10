@@ -21,7 +21,7 @@ const TIME_SLOTS = [
   "16:00-17:00",
 ];
 
-// Build an O(1) break map and add a one-time diagnostic print
+// Build break map
 const buildBreakMap = (breaks = []) => {
   const map = {};
   breaks.forEach((b) => {
@@ -44,13 +44,15 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
 
   const breakMap = useMemo(() => buildBreakMap(breaks), [breaks]);
 
-  const getEntryForSlot = (day, timeSlot) => {
+  // This function now returns an ARRAY of entries
+  const getEntriesForSlot = (day, timeSlot) => {
     const startTime = timeSlot.split("-")[0];
-    const match = schedule.find((entry) => {
+    const matches = schedule.filter((entry) => {
+      // Use .filter()
       const ts = entry?.timeslotID;
       return ts?.day === day && ts?.startTime === startTime;
     });
-    return match || null;
+    return matches; // Return array
   };
 
   const getConflictsForEntry = (entryId) => {
@@ -97,6 +99,7 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
       day: s?.timeslotID?.day,
       start: s?.timeslotID?.startTime,
       subj: s?.subjectCode?.subjectCode,
+      batch: s?.batchGroup,
     }))
   );
 
@@ -131,24 +134,13 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
                     {timeSlot}
                   </td>
                   {DAYS_OF_WEEK.map((day) => {
-                    const entry = getEntryForSlot(day, timeSlot);
+                    const entries = getEntriesForSlot(day, timeSlot); // Get all entries
                     const hasBreak = !!breakMap[`${day}-${startTime}`];
-
-                    // Deep per-cell logs for the key slot in question
-                    if (startTime === "13:00") {
-                      console.log(
-                        `🧪 CELL ${day} ${startTime}: hasBreak=${hasBreak} subj=${entry?.subjectCode?.subjectCode || "-"}`
-                      );
-                    }
-
-                    const entryConflicts = entry
-                      ? getConflictsForEntry(entry._id)
-                      : [];
 
                     return (
                       <td
                         key={`${day}-${slotIndex}`}
-                        className="px-4 py-4 text-center relative border border-gray-200 min-h-[100px]"
+                        className="px-4 py-4 text-center relative border border-gray-200 min-h-[100px] align-top" // Added align-top
                       >
                         {hasBreak ? (
                           <div
@@ -162,46 +154,64 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
                               Click to edit
                             </p>
                           </div>
-                        ) : entry && entry.subjectCode ? (
-                          <div
-                            className="relative cursor-pointer hover:bg-blue-50 hover:shadow-md p-2 rounded transition-all duration-200 group bg-blue-50 border-2 border-blue-500"
-                            onClick={() => handleEntryClick(entry)}
-                          >
-                            {entryConflicts.length > 0 && (
-                              <div className="absolute top-1 right-1 flex gap-1">
-                                {entryConflicts.map((conflict, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="w-3 h-3 rounded-full bg-red-500 hover:scale-125 transition-transform"
-                                    title={conflict?.message}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                            <div className="text-xs">
-                              <p className="font-bold text-blue-700">
-                                {entry.subjectCode?.subjectCode || "N/A"}
-                              </p>
-                              <p className="text-gray-600 truncate">
-                                {entry.facultyID?.name || "N/A"}
-                              </p>
-                              <p className="text-gray-500">
-                                {entry.classroomID?.roomNumber || "N/A"}
-                              </p>
-                              {entry.batchGroup && (
-                                <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-semibold">
-                                  {entry.batchGroup}
-                                </span>
-                              )}
-                              {entry.isRMC && (
-                                <span className="inline-block mt-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-semibold">
-                                  RMC
-                                </span>
-                              )}
-                              <p className="text-xs text-blue-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                Click to edit
-                              </p>
-                            </div>
+                        ) : entries.length > 0 ? ( // Check if array has entries
+                          <div className="flex flex-col gap-2">
+                            {" "}
+                            {/* Wrapper for multiple entries */}
+                            {entries.map((entry) => {
+                              // Map over all entries for this slot
+                              const entryConflicts = getConflictsForEntry(
+                                entry._id
+                              );
+                              return (
+                                <div
+                                  key={entry._id} // Add a unique key
+                                  className="relative cursor-pointer hover:bg-blue-50 hover:shadow-md p-2 rounded transition-all duration-200 group bg-blue-50 border-2 border-blue-500"
+                                  onClick={() => handleEntryClick(entry)}
+                                >
+                                  {entryConflicts.length > 0 && (
+                                    <div className="absolute top-1 right-1 flex gap-1">
+                                      {entryConflicts.map((conflict, idx) => (
+                                        <div
+                                          key={idx}
+                                          className="w-3 h-3 rounded-full bg-red-500 hover:scale-125 transition-transform"
+                                          title={conflict?.message}
+                                        />
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="text-xs">
+                                    <p className="font-bold text-blue-700">
+                                      {entry.subjectCode?.subjectCode || "N/A"}
+                                      {/* Show the batch group */}
+                                      <span
+                                        className={`font-semibold ml-1 ${
+                                          entry.batchGroup === "Full"
+                                            ? "text-red-600"
+                                            : "text-purple-600"
+                                        }`}
+                                      >
+                                        ({entry.batchGroup || "Full"})
+                                      </span>
+                                    </p>
+                                    <p className="text-gray-600 truncate">
+                                      {entry.facultyID?.name || "N/A"}
+                                    </p>
+                                    <p className="text-gray-500">
+                                      {entry.classroomID?.roomNumber || "N/A"}
+                                    </p>
+                                    {entry.isRMC && (
+                                      <span className="inline-block mt-1 ml-1 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-semibold">
+                                        RMC
+                                      </span>
+                                    )}
+                                    <p className="text-xs text-blue-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      Click to edit
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-gray-300 font-semibold text-2xl">

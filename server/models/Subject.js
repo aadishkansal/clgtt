@@ -22,6 +22,7 @@ const subjectSchema = new mongoose.Schema(
     semester: {
       type: Number,
       required: true,
+      // ✅ FIX: Expanded enum to allow all semesters
       enum: [1, 2, 3, 4, 5, 6, 7, 8],
     },
     type: {
@@ -30,20 +31,20 @@ const subjectSchema = new mongoose.Schema(
       default: ["L"],
       required: true,
     },
-    creditHours: {
+    lectureCredits: {
       type: Number,
-      required: true,
-      min: 1,
-      max: 10,
+      default: 0,
     },
-    creditDistribution: {
-      type: Map,
-      of: Number,
-      default: new Map(),
+    tutorialCredits: {
+      type: Number,
+      default: 0,
+    },
+    practicalCredits: {
+      type: Number,
+      default: 0,
     },
     department: {
       type: String,
-      required: true,
       trim: true,
     },
     assignedFaculty: [

@@ -1,6 +1,8 @@
 import PDFDocument from "pdfkit";
 
 export const generateTimetablePDF = async (timetableData) => {
+
+  console.log("PDF GENERATOR DATA:", JSON.stringify(timetableData, null, 2));
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({

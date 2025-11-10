@@ -18,7 +18,7 @@ router
   .route("/")
   .get(getAllSubjects)
   .post(subjectValidator, validate, createSubject);
-
+          
 router
   .route("/:id")
   .get(getSubjectById)

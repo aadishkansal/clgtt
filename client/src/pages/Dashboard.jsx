@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect,} from "react";
 import { YearTabs } from "../components/Dashboard/YearTabs";
 import { WeeklyGrid } from "../components/Dashboard/WeeklyGrid";
 import { ConflictSummary } from "../components/Dashboard/ConflictSummary";
@@ -16,24 +16,24 @@ export const Dashboard = () => {
   const [downloadingAll, setDownloadingAll] = useState(false); // NEW
 
   useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get(`/dashboard/year/${selectedYear}`, {
+          params: { semester: selectedSemester },
+        });
+        const data = response.data.data || response.data.timetables || [];
+        setTimetableData(Array.isArray(data) ? data : []);
+      } catch (error) {
+        toast.error(handleApiError(error) || "Failed to load dashboard");
+        setTimetableData([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadDashboardData();
   }, [selectedYear, selectedSemester]);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      const response = await api.get(`/dashboard/year/${selectedYear}`, {
-        params: { semester: selectedSemester },
-      });
-      const data = response.data.data || response.data.timetables || [];
-      setTimetableData(Array.isArray(data) ? data : []);
-    } catch (error) {
-      toast.error(handleApiError(error) || "Failed to load dashboard");
-      setTimetableData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Download single PDF
   const handleDownloadPDF = async (timetableId) => {
@@ -129,6 +129,7 @@ export const Dashboard = () => {
         </p>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard
           label="Total Timetables"
@@ -148,10 +149,12 @@ export const Dashboard = () => {
         <StatCard label="Total Breaks" value={allBreaks.length} color="red" />
       </div>
 
+      {/* Year Selection */}
       <YearTabs selectedYear={selectedYear} onYearChange={setSelectedYear} />
 
+      {/* Semester Selection */}
       <div className="flex gap-4 flex-wrap">
-        {[1, 2].map((sem) => (
+        {[1, 2,3,4,5,6,7,8].map((sem) => (
           <button
             key={sem}
             onClick={() => setSelectedSemester(sem)}
@@ -166,7 +169,7 @@ export const Dashboard = () => {
         ))}
       </div>
 
-      {/* NEW: Unified PDF Download */}
+      {/* Unified PDF Download */}
       {timetableData.length > 0 && (
         <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
@@ -199,7 +202,7 @@ export const Dashboard = () => {
         </div>
       )}
 
-      {/* Individual timetable cards */}
+      {/* Individual Timetable Cards */}
       {timetableData.length > 0 && (
         <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
           <h3 className="text-lg font-bold text-gray-800 mb-4">
@@ -253,6 +256,7 @@ export const Dashboard = () => {
         </div>
       )}
 
+      {/* Weekly Schedule & Conflict Summary */}
       {flattenedSchedule.length > 0 ? (
         <>
           <WeeklyGrid

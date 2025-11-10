@@ -1,36 +1,6 @@
 import Subject from "../models/Subject.js";
 import Faculty from "../models/Faculty.js";
 
-const calculateCreditDistribution = (types, totalCredits) => {
-  if (!types || types.length === 0) return {};
-
-  const distribution = {};
-  const totalCreditsNum = parseInt(totalCredits);
-
-  if (types.length === 1) {
-    distribution[types[0]] = totalCreditsNum;
-  } else if (types.length === 2 && types.includes("L") && types.includes("P")) {
-    // Lab + Theory: 4 for theory, 1 for lab
-    distribution["L"] = Math.max(1, totalCreditsNum - 1);
-    distribution["P"] = 1;
-  } else if (types.length === 2 && types.includes("L") && types.includes("T")) {
-    // Lecture + Tutorial: 80% lecture, 20% tutorial
-    distribution["L"] = Math.ceil(totalCreditsNum * 0.8);
-    distribution["T"] = totalCreditsNum - distribution["L"];
-  } else if (types.length === 2 && types.includes("T") && types.includes("P")) {
-    // Tutorial + Practical: 50-50 split
-    distribution["T"] = Math.ceil(totalCreditsNum / 2);
-    distribution["P"] = totalCreditsNum - distribution["T"];
-  } else if (types.length === 3) {
-    // All three: 60% L, 20% T, 20% P
-    distribution["L"] = Math.ceil(totalCreditsNum * 0.6);
-    distribution["T"] = Math.ceil(totalCreditsNum * 0.2);
-    distribution["P"] = totalCreditsNum - distribution["L"] - distribution["T"];
-  }
-
-  return distribution;
-};
-
 export const getAllSubjects = async (req, res) => {
   try {
     console.log("ðŸ“š Fetching all subjects...");
@@ -77,91 +47,59 @@ export const getSubjectById = async (req, res, next) => {
 
 export const createSubject = async (req, res, next) => {
   try {
-    const { subjectCode, name, year, semester, type, creditHours, department } =
-      req.body;
-
-    console.log("ðŸ“ Creating subject with:", {
+    const {
       subjectCode,
       name,
       year,
       semester,
       type,
-      creditHours,
       department,
+      lectureCredits,
+      tutorialCredits,
+      practicalCredits,
+    } = req.body;
+
+    console.log("ðŸ“ Creating subject with:", {
+      subjectCode,
+      name,
+      type,
+      lectureCredits,
+      tutorialCredits,
+      practicalCredits,
     });
 
-    // Validation check
-    if (
-      !subjectCode ||
-      !name ||
-      !year ||
-      !semester ||
-      !creditHours ||
-      !department
-    ) {
-      console.log("âŒ Missing required fields");
-      return res.status(400).json({
-        success: false,
-        message: "Please provide all required fields",
-      });
+    if (!subjectCode || !name || !year || !semester) {
+      return res
+        .status(400)
+        .json({ message: "Please provide all required fields" });
     }
-
-    // Validate type is array
     if (!Array.isArray(type) || type.length === 0) {
-      console.log("âŒ Type must be an array");
-      return res.status(400).json({
-        success: false,
-        message: "Type must be an array with at least one value (L, T, or P)",
-      });
+      return res.status(400).json({ message: "Type must be an array" });
     }
-
-    // Check if subject code already exists
     const existingSubject = await Subject.findOne({
       subjectCode: subjectCode.toString().toUpperCase().trim(),
     });
-
     if (existingSubject) {
-      console.log("âŒ Subject code already exists");
-      return res.status(400).json({
-        success: false,
-        message: "Subject code already exists",
-      });
+      return res.status(400).json({ message: "Subject code already exists" });
     }
-
-    const types = Array.isArray(type) ? type : [type];
-    const credits = parseInt(creditHours);
-
-    if (isNaN(credits) || credits < 1 || credits > 10) {
-      console.log("âŒ Invalid credit hours");
-      return res.status(400).json({
-        success: false,
-        message: "Credit hours must be between 1 and 10",
-      });
-    }
-
-    const creditDistribution = calculateCreditDistribution(types, credits);
-
-    console.log("ðŸ’¾ Credit distribution:", creditDistribution);
 
     const newSubject = await Subject.create({
       subjectCode: subjectCode.toString().toUpperCase().trim(),
       name: name.trim(),
       year: parseInt(year),
       semester: parseInt(semester),
-      type: types,
-      creditHours: credits,
-      creditDistribution: new Map(Object.entries(creditDistribution)),
+      type: type,
       department: department.trim(),
+      lectureCredits: parseInt(lectureCredits) || 0,
+      tutorialCredits: parseInt(tutorialCredits) || 0,
+      practicalCredits: parseInt(practicalCredits) || 0,
       assignedFaculty: [],
     });
 
     console.log("âœ… Subject created:", newSubject._id);
-
-    res.status(201).json({
-      success: true,
-      message: "Subject created successfully",
-      subject: newSubject,
-    });
+    res
+      .status(201)
+      .json({ success: true, message: "Subject created", subject: newSubject });
   } catch (error) {
     console.error("âŒ Error creating subject:", error.message);
     next(error);
@@ -170,49 +108,41 @@ export const createSubject = async (req, res, next) => {
 
 export const updateSubject = async (req, res, next) => {
   try {
-    const { name, year, semester, type, creditHours, department } = req.body;
+    const {
+      name,
+      year,
+      semester,
+      type,
+      department,
+      lectureCredits,
+      tutorialCredits,
+      practicalCredits,
+    } = req.body;
 
     let subject = await Subject.findById(req.params.id);
-
     if (!subject) {
-      return res.status(404).json({
-        success: false,
-        message: "Subject not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subject not found" });
     }
 
     if (name) subject.name = name.trim();
     if (year) subject.year = parseInt(year);
     if (semester) subject.semester = parseInt(semester);
-
-    if (type) {
-      const types = Array.isArray(type) ? type : [type];
-      subject.type = types;
-
-      const credits = creditHours ? parseInt(creditHours) : subject.creditHours;
-      const creditDistribution = calculateCreditDistribution(types, credits);
-      subject.creditDistribution = new Map(Object.entries(creditDistribution));
-    }
-
-    if (creditHours) {
-      const credits = parseInt(creditHours);
-      subject.creditHours = credits;
-      const creditDistribution = calculateCreditDistribution(
-        subject.type,
-        credits
-      );
-      subject.creditDistribution = new Map(Object.entries(creditDistribution));
-    }
-
     if (department) subject.department = department.trim();
+    if (type) subject.type = Array.isArray(type) ? type : [type];
+
+    if (lectureCredits != null)
+      subject.lectureCredits = parseInt(lectureCredits) || 0;
+    if (tutorialCredits != null)
+      subject.tutorialCredits = parseInt(tutorialCredits) || 0;
+    if (practicalCredits != null)
+      subject.practicalCredits = parseInt(practicalCredits) || 0;
 
     await subject.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Subject updated successfully",
-      subject,
-    });
+    res
+      .status(200)
+      .json({ success: true, message: "Subject updated", subject });
   } catch (error) {
     next(error);
   }
@@ -253,27 +183,22 @@ export const assignFacultyToSubject = async (req, res, next) => {
 
     const subject = await Subject.findById(id);
     if (!subject) {
-      return res.status(404).json({
-        success: false,
-        message: "Subject not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subject not found" });
     }
 
     const faculty = await Faculty.findById(facultyId);
     if (!faculty) {
-      return res.status(404).json({
-        success: false,
-        message: "Faculty not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Faculty not found" });
     }
 
-    // Add faculty to subject if not already assigned
     if (!subject.assignedFaculty.includes(facultyId)) {
       subject.assignedFaculty.push(facultyId);
       await subject.save();
     }
-
-    // Add subject to faculty if not already assigned
     if (!faculty.subjects.includes(id)) {
       faculty.subjects.push(id);
       await faculty.save();
@@ -296,18 +221,16 @@ export const removeFacultyFromSubject = async (req, res, next) => {
 
     const subject = await Subject.findById(id);
     if (!subject) {
-      return res.status(404).json({
-        success: false,
-        message: "Subject not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subject not found" });
     }
 
     const faculty = await Faculty.findById(facultyId);
     if (!faculty) {
-      return res.status(404).json({
-        success: false,
-        message: "Faculty not found",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Faculty not found" });
     }
 
     subject.assignedFaculty = subject.assignedFaculty.filter(

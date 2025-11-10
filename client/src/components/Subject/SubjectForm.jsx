@@ -9,37 +9,13 @@ import { handleApiError } from "../../utils/helpers";
 import { toast } from "react-toastify";
 
 const YEARS = [1, 2, 3, 4];
-const SEMESTERS = [1, 2];
+// ✅ FIX: Expanded to all 8 semesters
+const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
 const SUBJECT_TYPES = [
   { label: "Lecture (L)", value: "L" },
   { label: "Tutorial (T)", value: "T" },
   { label: "Practical (P)", value: "P" },
 ];
-
-const calculateCreditDistribution = (types, totalCredits) => {
-  if (!types || types.length === 0) return {};
-
-  const distribution = {};
-
-  if (types.length === 1) {
-    distribution[types[0]] = totalCredits;
-  } else if (types.length === 2 && types.includes("L") && types.includes("P")) {
-    distribution["L"] = Math.max(1, totalCredits - 1);
-    distribution["P"] = 1;
-  } else if (types.length === 2 && types.includes("L") && types.includes("T")) {
-    distribution["L"] = Math.ceil(totalCredits * 0.8);
-    distribution["T"] = totalCredits - distribution["L"];
-  } else if (types.length === 2 && types.includes("T") && types.includes("P")) {
-    distribution["T"] = Math.ceil(totalCredits / 2);
-    distribution["P"] = totalCredits - distribution["T"];
-  } else if (types.length === 3) {
-    distribution["L"] = Math.ceil(totalCredits * 0.6);
-    distribution["T"] = Math.ceil(totalCredits * 0.2);
-    distribution["P"] = totalCredits - distribution["L"] - distribution["T"];
-  }
-
-  return distribution;
-};
 
 export const SubjectForm = ({ subject = null, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -48,49 +24,37 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
     year: "",
     semester: "",
     type: ["L"],
-    creditHours: 3,
     department: "",
+    lectureCredits: 3,
+    tutorialCredits: 0,
+    practicalCredits: 0,
   });
 
-  const [creditDistribution, setCreditDistribution] = useState({});
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
     if (subject) {
       setFormData({
-        ...subject,
+        subjectCode: subject.subjectCode || "",
+        name: subject.name || "",
+        year: subject.year || "",
+        semester: subject.semester || "",
         type: Array.isArray(subject.type) ? subject.type : [subject.type],
+        department: subject.department || "",
+        lectureCredits: subject.lectureCredits || 0,
+        tutorialCredits: subject.tutorialCredits || 0,
+        practicalCredits: subject.practicalCredits || 0,
       });
-      updateCreditDistribution(
-        Array.isArray(subject.type) ? subject.type : [subject.type],
-        subject.creditHours
-      );
     }
   }, [subject]);
 
-  const updateCreditDistribution = (types, credits) => {
-    const distribution = calculateCreditDistribution(types, credits);
-    setCreditDistribution(distribution);
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
-
-    if (name === "type") {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-      updateCreditDistribution(value, formData.creditHours);
-    } else if (name === "creditHours") {
-      const credits = parseInt(value) || 0;
-      setFormData((prev) => ({ ...prev, [name]: credits }));
-      updateCreditDistribution(formData.type, credits);
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -99,23 +63,32 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
     if (formData.type.length === 0) {
       setErrors((prev) => ({
         ...prev,
-        type: "Please select at least one subject type",
+        type: "Please select at least one type",
       }));
       return;
     }
 
     setLoading(true);
-
     try {
       const submitData = {
-        ...formData,
+        subjectCode: formData.subjectCode,
+        name: formData.name,
         year: parseInt(formData.year),
         semester: parseInt(formData.semester),
-        creditHours: parseInt(formData.creditHours),
-        creditDistribution,
+        type: formData.type,
+        department: formData.department,
+        lectureCredits: formData.type.includes("L")
+          ? parseInt(formData.lectureCredits) || 0
+          : 0,
+        tutorialCredits: formData.type.includes("T")
+          ? parseInt(formData.tutorialCredits) || 0
+          : 0,
+        practicalCredits: formData.type.includes("P")
+          ? parseInt(formData.practicalCredits) || 0
+          : 0,
       };
 
-      console.log("ðŸ“¤ Submitting:", submitData);
+      console.log("Submitting:", submitData);
 
       if (subject) {
         await api.put(`/subjects/${subject._id}`, submitData);
@@ -131,18 +104,19 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
         year: "",
         semester: "",
         type: ["L"],
-        creditHours: 3,
         department: "",
+        lectureCredits: 3,
+        tutorialCredits: 0,
+        practicalCredits: 0,
       });
       setErrors({});
       onSuccess();
     } catch (error) {
-      console.error("âŒ Error response:", error.response?.data);
-
+      console.error("Error response:", error.response?.data);
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
       }
-
+      // This will show the actual validation message from Mongoose
       toast.error(error.response?.data?.message || handleApiError(error));
     } finally {
       setLoading(false);
@@ -164,13 +138,12 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             onChange={handleChange}
             required
             disabled={!!subject}
-            placeholder="e.g., CS101"
+            placeholder="e.g., 5EIRC2"
           />
           {errors.subjectCode && (
             <p className="text-red-500 text-sm mt-1">{errors.subjectCode}</p>
           )}
         </div>
-
         <div>
           <Input
             label="Subject Name"
@@ -178,13 +151,12 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             value={formData.name}
             onChange={handleChange}
             required
-            placeholder="e.g., Data Structures"
+            placeholder="e.g., Python Programming"
           />
           {errors.name && (
             <p className="text-red-500 text-sm mt-1">{errors.name}</p>
           )}
         </div>
-
         <div>
           <Select
             label="Year"
@@ -199,7 +171,6 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             <p className="text-red-500 text-sm mt-1">{errors.year}</p>
           )}
         </div>
-
         <div>
           <Select
             label="Semester"
@@ -217,7 +188,18 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             <p className="text-red-500 text-sm mt-1">{errors.semester}</p>
           )}
         </div>
-
+        <div>
+          <Input
+            label="Department"
+            name="department"
+            value={formData.department}
+            onChange={handleChange}
+            placeholder="e.g., Electronics & Instrumentation"
+          />
+          {errors.department && (
+            <p className="text-red-500 text-sm mt-1">{errors.department}</p>
+          )}
+        </div>
         <div>
           <MultiSelect
             label="Type"
@@ -231,61 +213,54 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             <p className="text-red-500 text-sm mt-1">{errors.type}</p>
           )}
         </div>
+      </div>
 
-        <div>
-          <Input
-            label="Total Credit Hours"
-            type="number"
-            name="creditHours"
-            value={formData.creditHours}
-            onChange={handleChange}
-            min="1"
-            max="10"
-          />
-          {errors.creditHours && (
-            <p className="text-red-500 text-sm mt-1">{errors.creditHours}</p>
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="font-semibold text-gray-800 mb-4">
+          Weekly Credit Distribution
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {formData.type.includes("L") && (
+            <div>
+              <Input
+                label="Lecture Credits (L)"
+                type="number"
+                name="lectureCredits"
+                value={formData.lectureCredits}
+                onChange={handleChange}
+                min="0"
+                max="10"
+              />
+            </div>
           )}
-        </div>
-
-        <div>
-          <Input
-            label="Department"
-            name="department"
-            value={formData.department}
-            onChange={handleChange}
-            required
-            placeholder="e.g., Computer Science"
-          />
-          {errors.department && (
-            <p className="text-red-500 text-sm mt-1">{errors.department}</p>
+          {formData.type.includes("T") && (
+            <div>
+              <Input
+                label="Tutorial Credits (T)"
+                type="number"
+                name="tutorialCredits"
+                value={formData.tutorialCredits}
+                onChange={handleChange}
+                min="0"
+                max="10"
+              />
+            </div>
+          )}
+          {formData.type.includes("P") && (
+            <div>
+              <Input
+                label="Practical Credits (P)"
+                type="number"
+                name="practicalCredits"
+                value={formData.practicalCredits}
+                onChange={handleChange}
+                min="0"
+                max="10"
+              />
+            </div>
           )}
         </div>
       </div>
-
-      {formData.type.length > 0 &&
-        Object.keys(creditDistribution).length > 0 && (
-          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h3 className="font-semibold text-gray-800 mb-4">
-              Credit Distribution
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {formData.type.map((type) => (
-                <div
-                  key={type}
-                  className="bg-white p-3 rounded border border-blue-100"
-                >
-                  <div className="text-sm text-gray-600">
-                    {SUBJECT_TYPES.find((t) => t.value === type)?.label}
-                  </div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {creditDistribution[type] || 0}
-                  </div>
-                  <div className="text-xs text-gray-500">credits</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
       <div className="flex justify-end gap-4 mt-8">
         <Button type="submit" disabled={loading}>

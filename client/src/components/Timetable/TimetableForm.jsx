@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Fragment, useMemo } from "react";
 import { Button } from "../Common/Button";
 import { Select } from "../Common/Select";
 import { MultiSelect } from "../Common/MultiSelect";
@@ -7,8 +7,9 @@ import { handleApiError } from "../../utils/helpers";
 import { toast } from "react-toastify";
 
 const YEARS = [1, 2, 3, 4];
-const SEMESTERS = [1, 2];
-const BATCHES = ["B1", "B2"];
+const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8]; // Fixed syntax
+const SECTIONS = ["A", "B"];
+const BATCHES = ["B1", "B2", "B3"]; // Added B3
 const DAYS = [
   "Monday",
   "Tuesday",
@@ -21,196 +22,192 @@ const DAYS = [
 export const TimetableForm = ({ onSave, onCancel }) => {
   const formRef = useRef(null);
 
+  // --- Data for Dropdowns ---
   const [faculties, setFaculties] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [classrooms, setClassrooms] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
 
+  // --- Step 1 Form Data ---
   const [bulkFormData, setBulkFormData] = useState({
     year: "",
     semester: "",
+    section: "",
     selectedDays: [],
     selectedBreaks: [],
   });
 
+  // --- Step 2 Form Data (New Structure) ---
   const [subjectSchedules, setSubjectSchedules] = useState({});
+
+  // --- Global State ---
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(1);
 
+  // --- Conflict Detection State ---
   const [facultyBookings, setFacultyBookings] = useState(new Map());
   const [classroomBookings, setClassroomBookings] = useState(new Map());
-  const [bookedSlots, setBookedSlots] = useState(new Set());
+  const [studentBookings, setStudentBookings] = useState(new Map());
 
   useEffect(() => {
     loadFormData();
   }, []);
 
+  // Loads all existing bookings for conflict checking
   const loadFormData = async () => {
     setLoading(true);
-
-    let facultyData = [];
     try {
-      const facultyRes = await api.get("/faculty");
-      facultyData = facultyRes.data?.data || facultyRes.data?.faculty || [];
-    } catch (error) {
-      console.warn("Faculty API failed:", error);
-      facultyData = [];
-    }
+      const cacheBustParams = { params: { _: new Date().getTime() } };
+      const [facRes, subRes, clsRes, timeRes, ttRes] = await Promise.all([
+        api.get("/faculty", cacheBustParams),
+        api.get("/subjects", cacheBustParams),
+        api.get("/classrooms", cacheBustParams),
+        api.get("/timeslots", cacheBustParams),
+        api.get("/timetable", cacheBustParams),
+      ]);
 
-    let subjectData = [];
-    try {
-      const subjectRes = await api.get("/subjects");
-      subjectData = subjectRes.data?.data || subjectRes.data?.subjects || [];
-    } catch (error) {
-      console.warn("Subjects API failed:", error);
-      subjectData = [];
-    }
+      const facultyData = facRes.data?.data || facRes.data?.faculty || [];
+      const subjectData = subRes.data?.data || subRes.data?.subjects || [];
+      const classroomData = clsRes.data?.data || clsRes.data?.classrooms || [];
+      const timeSlotData = timeRes.data?.data || timeRes.data?.timeSlots || [];
+      const timetableData = ttRes.data?.data || ttRes.data?.timetables || [];
 
-    let classroomData = [];
-    try {
-      const classroomRes = await api.get("/classrooms");
-      classroomData =
-        classroomRes.data?.data || classroomRes.data?.classrooms || [];
-    } catch (error) {
-      console.warn("Classrooms API failed:", error);
-      classroomData = [];
-    }
+      setFaculties(facultyData);
+      setSubjects(subjectData);
+      setClassrooms(classroomData);
+      setTimeSlots(timeSlotData);
 
-    let timeSlotData = [];
-    try {
-      const timeslotRes = await api.get("/timeslots");
-      timeSlotData =
-        timeslotRes.data?.data || timeslotRes.data?.timeSlots || [];
-    } catch (error) {
-      console.warn("Timeslots API failed:", error);
-      timeSlotData = [];
-    }
+      const facMap = new Map();
+      const clsMap = new Map();
+      const studentMap = new Map();
 
-    let timetableData = [];
-    try {
-      const timetableRes = await api.get("/timetable");
-      timetableData = timetableRes.data?.data || timetableRes.data || [];
-    } catch (error) {
-      console.warn("Timetable API failed:", error);
-      timetableData = [];
-    }
-
-    setFaculties(facultyData);
-    setSubjects(subjectData);
-    setClassrooms(classroomData);
-    setTimeSlots(timeSlotData);
-
-    const facMap = new Map();
-    const clsMap = new Map();
-    const bookedSlotSet = new Set();
-
-    timetableData.forEach((timetable) => {
-      if (timetable && timetable.schedule) {
-        timetable.schedule.forEach((entry) => {
+      timetableData.forEach((tt) => {
+        if (!tt || !tt.schedule) return;
+        tt.schedule.forEach((entry) => {
           const facId = entry.facultyID?._id || entry.facultyID;
           const clsId = entry.classroomID?._id || entry.classroomID;
           const slotId = entry.timeslotID?._id || entry.timeslotID;
-          const timeSlotKey = entry.timeSlot || slotId;
-
-          if (timeSlotKey) {
-            bookedSlotSet.add(timeSlotKey);
-          }
+          const batch = entry.batchGroup || "Full";
+          const section = tt.section || "A";
 
           if (facId && slotId) {
-            const key = facId + "-" + slotId;
-            if (!facMap.has(key)) {
-              facMap.set(key, {
-                year: timetable.year,
-                semester: timetable.semester,
-                subject: entry.subjectCode?.subjectCode || "N/A",
-              });
-            }
+            facMap.set(facId + "-" + slotId, {
+              year: tt.year,
+              subject: entry.subjectCode?.subjectCode || "N/A",
+            });
           }
-
           if (clsId && slotId) {
-            const key = clsId + "-" + slotId;
-            if (!clsMap.has(key)) {
-              clsMap.set(key, {
-                year: timetable.year,
-                semester: timetable.semester,
-                subject: entry.subjectCode?.subjectCode || "N/A",
-              });
-            }
+            clsMap.set(clsId + "-" + slotId, {
+              year: tt.year,
+              subject: entry.subjectCode?.subjectCode || "N/A",
+            });
+          }
+          if (slotId) {
+            const studentKey = `${tt.year}-${tt.semester}-${section}-${slotId}`;
+            if (!studentMap.has(studentKey)) studentMap.set(studentKey, []);
+            studentMap.get(studentKey).push(batch);
           }
         });
-      }
-    });
+      });
 
-    setFacultyBookings(facMap);
-    setClassroomBookings(clsMap);
-    setBookedSlots(bookedSlotSet);
+      setFacultyBookings(facMap);
+      setClassroomBookings(clsMap);
+      setStudentBookings(studentMap);
 
-    console.log("Loaded ", {
-      faculties: facultyData.length,
-      subjects: subjectData.length,
-      classrooms: classroomData.length,
-      timeSlots: timeSlotData.length,
-      timetables: timetableData.length,
-      facultyBookings: facMap.size,
-      classroomBookings: clsMap.size,
-      bookedSlots: bookedSlotSet.size,
-    });
-
-    setLoading(false);
+      console.log("Loaded bookings:", {
+        faculty: facMap.size,
+        classroom: clsMap.size,
+        student: studentMap.size,
+      });
+    } catch (error) {
+      toast.error("Failed to load form data");
+      console.error("Load data error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredSubjects = subjects.filter(
-    (s) =>
-      s.year === parseInt(bulkFormData.year) &&
-      s.semester === parseInt(bulkFormData.semester)
-  );
+  // ✅ FIX 2: Memoize filteredSubjects to prevent re-creation on every render
+  const filteredSubjects = useMemo(() => {
+    return subjects.filter(
+      (s) =>
+        s.year === parseInt(bulkFormData.year) &&
+        s.semester === parseInt(bulkFormData.semester)
+    );
+  }, [subjects, bulkFormData.year, bulkFormData.semester]);
 
+  // This useEffect builds the required entries for each subject
   useEffect(() => {
-    if (filteredSubjects.length > 0) {
+    if (step === 2 && filteredSubjects.length > 0) {
       setSubjectSchedules((prev) => {
-        const schedules = { ...prev };
+        const newSchedules = { ...prev };
 
         filteredSubjects.forEach((subject) => {
-          if (!schedules[subject._id]) {
-            schedules[subject._id] = {
+          if (newSchedules[subject._id]) return;
+
+          const newEntries = [];
+          const types = Array.isArray(subject.type)
+            ? subject.type
+            : [subject.type];
+
+          const lectureHours = (subject.lectureCredits || 0) * 1;
+          const tutorialHours = (subject.tutorialCredits || 0) * 1;
+          const practicalHours = (subject.practicalCredits || 0) * 2;
+
+          if (types.includes("L") && lectureHours > 0) {
+            newEntries.push({
+              id: "L",
+              entryType: "Lecture",
+              batch: "Full",
               faculty: "",
               classroom: "",
-              batch: "",
               days: [],
               timeSlots: [],
-              subjectType: Array.isArray(subject.type)
-                ? subject.type.length === 1
-                  ? subject.type[0]
-                  : ""
-                : subject.type,
-            };
+              requiredHours: lectureHours,
+            });
           }
+          if (types.includes("T") && tutorialHours > 0) {
+            newEntries.push({
+              id: "T",
+              entryType: "Tutorial",
+              batch: "Full",
+              faculty: "",
+              classroom: "",
+              days: [],
+              timeSlots: [],
+              requiredHours: tutorialHours,
+            });
+          }
+          if (types.includes("P") && practicalHours > 0) {
+            BATCHES.forEach((batch) => {
+              newEntries.push({
+                id: `P-${batch}`,
+                entryType: "Practical",
+                batch: batch,
+                faculty: "",
+                classroom: "",
+                days: [],
+                timeSlots: [],
+                requiredHours: practicalHours,
+              });
+            });
+          }
+          newSchedules[subject._id] = { entries: newEntries };
         });
-
-        return schedules;
+        return newSchedules;
       });
     }
-  }, [filteredSubjects]);
-
-  const calculateRequiredHours = (subject) => {
-    if (!subject) return 0;
-    const subType = subjectSchedules[subject._id]?.subjectType;
-    if (subType === "P") {
-      return subject.creditHours * 2;
-    }
-    return subject.creditHours;
-  };
+    // ✅ FIX 3: Removed `subjects` from dependency array
+  }, [step, filteredSubjects]);
 
   const handleStep1Change = (e) => {
     const { name, value } = e.target;
-    setBulkFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
+    setBulkFormData((prev) => ({ ...prev, [name]: value }));
+    if (name === "year" || name === "semester" || name === "section") {
+      setSubjectSchedules({});
     }
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
   const handleStep1MultiChange = (e) => {
@@ -221,44 +218,41 @@ export const TimetableForm = ({ onSave, onCancel }) => {
     }));
   };
 
-  const handleSubjectScheduleChange = (subjectId, field, value) => {
+  const handleEntryChange = (subjectId, entryId, field, value) => {
     setSubjectSchedules((prev) => {
-      const currentSchedule = prev[subjectId] || {
-        faculty: "",
-        classroom: "",
-        batch: "",
-        days: [],
-        timeSlots: [],
-        subjectType: "",
-      };
-      return {
-        ...prev,
-        [subjectId]: {
-          ...currentSchedule,
-          [field]: value,
-        },
-      };
-    });
-    if (errors[subjectId]) {
-      setErrors((prev) => ({ ...prev, [subjectId]: "" }));
-    }
-  };
+      const subject = prev[subjectId];
+      if (!subject) return prev;
 
-  const handleSubjectMultiSelect = (subjectId, field, value) => {
-    setSubjectSchedules((prev) => {
-      const currentSchedule = prev[subjectId] || {
-        faculty: "",
-        classroom: "",
-        batch: "",
-        days: [],
-        timeSlots: [],
-        subjectType: "",
-      };
+      const updatedEntries = subject.entries.map((entry) => {
+        if (entry.id === entryId) {
+          let newValues = { ...entry, [field]: value };
+          if (field === "timeSlots") {
+            newValues.timeSlots = value;
+          }
+          if (
+            field === "faculty" ||
+            field === "classroom" ||
+            field === "days"
+          ) {
+            newValues.timeSlots = [];
+          }
+          return newValues;
+        }
+        return entry;
+      });
+      const errorKey = `${subjectId}-${entryId}`;
+      if (errors[errorKey]) {
+        setErrors((prevErrors) => {
+          const newErrors = { ...prevErrors };
+          delete newErrors[errorKey];
+          return newErrors;
+        });
+      }
       return {
         ...prev,
         [subjectId]: {
-          ...currentSchedule,
-          [field]: Array.isArray(value) ? value : [value],
+          ...subject,
+          entries: updatedEntries,
         },
       };
     });
@@ -268,61 +262,66 @@ export const TimetableForm = ({ onSave, onCancel }) => {
     const newErrors = {};
     if (!bulkFormData.year) newErrors.year = "Select year";
     if (!bulkFormData.semester) newErrors.semester = "Select semester";
+    if (!bulkFormData.section) newErrors.section = "Select section";
     if (bulkFormData.selectedDays.length === 0)
       newErrors.selectedDays = "Select at least one day";
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const validateAllSubjects = () => {
     const newErrors = {};
-
     filteredSubjects.forEach((subject) => {
       const schedule = subjectSchedules[subject._id];
-      if (!schedule) return;
+      if (!schedule || !schedule.entries) return;
 
-      const subErrors = [];
-
-      if (!schedule.faculty) subErrors.push("Faculty required");
-      if (!schedule.classroom) subErrors.push("Classroom required");
-
-      if (schedule.subjectType === "P" && !schedule.batch) {
-        subErrors.push("Batch required for Practical");
-      }
-
-      if (schedule.days.length === 0) {
-        subErrors.push("Select at least one day");
-      }
-
-      const requiredHours = calculateRequiredHours(subject);
-      if (schedule.timeSlots.length !== requiredHours) {
-        subErrors.push(
-          `Select exactly ${requiredHours} slots (${requiredHours} hours)`
-        );
-      }
-
-      schedule.timeSlots.forEach((slotId) => {
-        const facId = schedule.faculty;
-        const clsId = schedule.classroom;
-
-        if (facId && facultyBookings.has(facId + "-" + slotId)) {
+      schedule.entries.forEach((entry) => {
+        const subErrors = [];
+        if (!entry.faculty) subErrors.push("Faculty required");
+        if (!entry.classroom) subErrors.push("Classroom required");
+        const entryDays =
+          entry.days.length > 0 ? entry.days : bulkFormData.selectedDays;
+        if (entryDays.length === 0) subErrors.push("Select at least one day");
+        if (entry.timeSlots.length !== entry.requiredHours) {
           subErrors.push(
-            `Faculty conflict: Slot booked in Year ${facultyBookings.get(facId + "-" + slotId).year}`
+            `Select exactly ${entry.requiredHours} slots (${entry.requiredHours} hours)`
           );
         }
-        if (clsId && classroomBookings.has(clsId + "-" + slotId)) {
-          subErrors.push(
-            `Classroom conflict: Slot booked in Year ${classroomBookings.get(clsId + "-" + slotId).year}`
-          );
+        entry.timeSlots.forEach((slotId) => {
+          if (
+            entry.faculty &&
+            facultyBookings.has(entry.faculty + "-" + slotId)
+          ) {
+            subErrors.push(`Faculty conflict on slot ${slotId}`);
+          }
+          if (
+            entry.classroom &&
+            classroomBookings.has(entry.classroom + "-" + slotId)
+          ) {
+            subErrors.push(`Classroom conflict on slot ${slotId}`);
+          }
+          const studentKey = `${bulkFormData.year}-${bulkFormData.semester}-${bulkFormData.section}-${slotId}`;
+          const existingBatches = studentBookings.get(studentKey) || [];
+          if (existingBatches.length > 0) {
+            if (entry.batch === "Full")
+              subErrors.push(
+                `Batch conflict: 'Full' clashes with ${existingBatches.join()}`
+              );
+            if (existingBatches.includes("Full"))
+              subErrors.push(
+                `Batch conflict: '${entry.batch}' clashes with 'Full'`
+              );
+            if (existingBatches.includes(entry.batch))
+              subErrors.push(
+                `Batch conflict: '${entry.batch}' is already booked`
+              );
+          }
+        });
+        if (subErrors.length > 0) {
+          newErrors[`${subject._id}-${entry.id}`] = subErrors.join(", ");
         }
       });
-
-      if (subErrors.length > 0) {
-        newErrors[subject._id] = subErrors.join(", ");
-      }
     });
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -334,56 +333,115 @@ export const TimetableForm = ({ onSave, onCancel }) => {
     }
   };
 
+  //
+  // 🌟 ===== THIS IS THE UPDATED FUNCTION ===== 🌟
+  //
   const handleSubmitAll = async () => {
     if (!validateAllSubjects()) {
-      toast.error(
-        "Please fix all errors (including cross-year conflicts) before submitting"
-      );
+      toast.error("Please fix all errors before submitting");
+      const firstErrorKey = Object.keys(errors)[0];
+      if (firstErrorKey) {
+        const errorEl = document.getElementById(`entry-${firstErrorKey}`);
+        errorEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
 
     setLoading(true);
+    let currentEntry = null; // ✅ 1. Add a variable to track the current entry
     try {
-      const entries = filteredSubjects.map((subject) => {
+      const allEntries = [];
+      filteredSubjects.forEach((subject) => {
         const schedule = subjectSchedules[subject._id];
-        return {
-          year: parseInt(bulkFormData.year),
-          semester: parseInt(bulkFormData.semester),
-          subject: subject._id,
-          subjectType: schedule.subjectType,
-          faculty: schedule.faculty,
-          classroom: schedule.classroom,
-          batch: schedule.subjectType === "P" ? schedule.batch : "Full",
-          days: schedule.days,
-          timeSlots: schedule.timeSlots,
-          breakSlots: bulkFormData.selectedBreaks,
-        };
+        schedule.entries.forEach((entry) => {
+          allEntries.push({
+            year: parseInt(bulkFormData.year),
+            semester: parseInt(bulkFormData.semester),
+            section: bulkFormData.section,
+            subject: subject._id,
+            subjectType:
+              entry.entryType === "Lecture"
+                ? "L"
+                : entry.entryType === "Practical"
+                  ? "P"
+                  : "T",
+            faculty: entry.faculty,
+            classroom: entry.classroom,
+            batch: entry.batch,
+            days:
+              entry.days.length > 0 ? entry.days : bulkFormData.selectedDays,
+            timeSlots: entry.timeSlots,
+            breakSlots: bulkFormData.selectedBreaks,
+          });
+        });
       });
 
-      console.log(`Creating ${entries.length} entries...`);
+      console.log(`Creating ${allEntries.length} entries...`);
 
-      for (const entry of entries) {
+      for (const entry of allEntries) {
+        currentEntry = entry; // ✅ 2. Update the tracker *before* each request
         await api.post("/timetable/create", entry);
       }
 
       toast.success(
-        `Successfully created ${entries.length} timetable entries!`
+        `Successfully created ${allEntries.length} timetable entries!`
       );
+
+      // Reload all booking data
+      loadFormData();
+      // Reset form
+      setStep(1);
+      setBulkFormData((prev) => ({
+        ...prev,
+        year: "",
+        semester: "",
+        section: "",
+        selectedDays: [],
+        selectedBreaks: [],
+      }));
+      setSubjectSchedules({});
+
       onSave();
     } catch (error) {
       console.error("Error:", error);
-      toast.error(
-        error.response?.data?.message ||
-          handleApiError(error) ||
-          "Failed to create entries"
-      );
+
+      // ✅ 3. This is the enhanced error logging block
+      let toastMessage = handleApiError(error) || "Failed to create entries";
+
+      // Check if it's the conflict error and we know which entry failed
+      if (error.response?.status === 409 && currentEntry) {
+        // 4. Log the exact conflicting entry to the console!
+        console.error("❌ CONFLICT OCCURRED ON THIS ENTRY:", currentEntry);
+        console.error("❌ SERVER RESPONSE:", error.response?.data);
+
+        // 5. Create a much more helpful toast message
+        const subject = filteredSubjects.find(
+          (s) => s._id === currentEntry.subject
+        );
+        const subjectName = subject
+          ? `${subject.subjectCode} - ${subject.name}`
+          : "Unknown Subject";
+
+        // Use the specific message from your server if it sends one
+        if (error.response?.data?.message) {
+          toastMessage = error.response.data.message;
+        } else {
+          // Otherwise, create a detailed fallback message
+          toastMessage = `Conflict on ${subjectName} (${currentEntry.batch}). Check faculty/room/batch booking.`;
+        }
+      }
+
+      toast.error(toastMessage); // 6. Show the specific error to the user
     } finally {
       setLoading(false);
     }
   };
+  //
+  // 🌟 ===== END OF UPDATED FUNCTION ===== 🌟
+  //
 
-  const getClassroomsForType = (subjectType) => {
-    if (subjectType === "P") {
+  const getClassroomsForType = (entryType) => {
+    if (entryType === "Practical") {
       return classrooms.filter((c) => c.type === "lab");
     }
     return classrooms.filter(
@@ -391,46 +449,59 @@ export const TimetableForm = ({ onSave, onCancel }) => {
     );
   };
 
-  const getAllSelectedSlotsInForm = () => {
+  const getFormSelectedSlots = (currentSubjectId, currentEntryId) => {
     const allSelected = new Set();
-    Object.values(subjectSchedules).forEach((schedule) => {
-      if (schedule.timeSlots && Array.isArray(schedule.timeSlots)) {
-        schedule.timeSlots.forEach((slotId) => {
-          allSelected.add(slotId);
-        });
-      }
+    Object.keys(subjectSchedules).forEach((subjectId) => {
+      const schedule = subjectSchedules[subjectId];
+      if (!schedule.entries) return;
+      schedule.entries.forEach((entry) => {
+        if (subjectId === currentSubjectId && entry.id === currentEntryId) {
+          return;
+        }
+        if (entry.timeSlots && Array.isArray(entry.timeSlots)) {
+          entry.timeSlots.forEach((slotId) => {
+            allSelected.add(slotId);
+          });
+        }
+      });
     });
     return allSelected;
   };
 
-  const getTimeSlotsForDays = (days, facultyId = null, classroomId = null) => {
-    const formSelectedSlots = getAllSelectedSlotsInForm();
+  const getAvailableTimeSlots = (subjectId, entryId, entry) => {
+    const { days, faculty, classroom, batch } = entry;
+    const entryDays = days.length > 0 ? days : bulkFormData.selectedDays;
+    const formSelectedSlots = getFormSelectedSlots(subjectId, entryId);
 
     return timeSlots
       .filter((slot) => {
-        const dayMatch = days.includes(slot.day);
-        const notBookedGlobally = !bookedSlots.has(slot._id);
+        const dayMatch = entryDays.includes(slot.day);
+        if (!dayMatch) return false;
+
         const notFormSelected = !formSelectedSlots.has(slot._id);
 
-        let noFacultyConflict = true;
-        if (facultyId && facultyBookings.has(facultyId + "-" + slot._id)) {
-          noFacultyConflict = false;
-        }
+        const noFacultyConflict = !facultyBookings.has(
+          faculty + "-" + slot._id
+        );
+        const noClassroomConflict = !classroomBookings.has(
+          classroom + "-" + slot._id
+        );
 
-        let noClassroomConflict = true;
-        if (
-          classroomId &&
-          classroomBookings.has(classroomId + "-" + slot._id)
-        ) {
-          noClassroomConflict = false;
+        const studentKey = `${bulkFormData.year}-${bulkFormData.semester}-${bulkFormData.section}-${slot._id}`;
+        const existingBatches = studentBookings.get(studentKey) || [];
+
+        let noBatchConflict = true;
+        if (existingBatches.length > 0) {
+          if (batch === "Full") noBatchConflict = false;
+          if (existingBatches.includes("Full")) noBatchConflict = false;
+          if (existingBatches.includes(batch)) noBatchConflict = false;
         }
 
         return (
-          dayMatch &&
-          notBookedGlobally &&
           notFormSelected &&
           noFacultyConflict &&
-          noClassroomConflict
+          noClassroomConflict &&
+          noBatchConflict
         );
       })
       .sort((a, b) => {
@@ -440,25 +511,30 @@ export const TimetableForm = ({ onSave, onCancel }) => {
       });
   };
 
-  const getBookedSlotsForDays = (
-    days,
-    facultyId = null,
-    classroomId = null
-  ) => {
-    const formSelectedSlots = getAllSelectedSlotsInForm();
+  const getBookedSlotsForDays = (subjectId, entryId, entry) => {
+    const { days, faculty, classroom, batch } = entry;
+    const entryDays = days.length > 0 ? days : bulkFormData.selectedDays;
+    const formSelectedSlots = getFormSelectedSlots(subjectId, entryId);
     const conflictedSlots = new Set(formSelectedSlots);
 
     timeSlots.forEach((slot) => {
-      if (days.includes(slot.day)) {
-        if (bookedSlots.has(slot._id)) conflictedSlots.add(slot._id);
+      if (!entryDays.includes(slot.day)) return;
 
-        if (facultyId && facultyBookings.has(facultyId + "-" + slot._id)) {
-          conflictedSlots.add(slot._id);
-        }
+      if (faculty && facultyBookings.has(faculty + "-" + slot._id)) {
+        conflictedSlots.add(slot._id);
+      }
+      if (classroom && classroomBookings.has(classroom + "-" + slot._id)) {
+        conflictedSlots.add(slot._id);
+      }
 
+      const studentKey = `${bulkFormData.year}-${bulkFormData.semester}-${bulkFormData.section}-${slot._id}`;
+      const existingBatches = studentBookings.get(studentKey) || [];
+
+      if (existingBatches.length > 0) {
         if (
-          classroomId &&
-          classroomBookings.has(classroomId + "-" + slot._id)
+          batch === "Full" ||
+          existingBatches.includes("Full") ||
+          existingBatches.includes(batch)
         ) {
           conflictedSlots.add(slot._id);
         }
@@ -469,22 +545,23 @@ export const TimetableForm = ({ onSave, onCancel }) => {
   };
 
   const getBreakSlotOptions = () => {
-    const formSelectedSlots = getAllSelectedSlotsInForm();
-    // const usedBreakSlots = new Set(bulkFormData.selectedBreaks);
+    const formSelectedSlots = getFormSelectedSlots();
+    const studentKeyPrefix = `${bulkFormData.year}-${bulkFormData.semester}-${bulkFormData.section}-`;
+    const localBookedSlots = new Set();
+    studentBookings.forEach((batches, key) => {
+      if (key.startsWith(studentKeyPrefix)) {
+        const slotId = key.substring(studentKeyPrefix.length);
+        localBookedSlots.add(slotId);
+      }
+    });
 
     return timeSlots
       .filter((t) => {
         const dayMatch = bulkFormData.selectedDays.includes(t.day);
+        if (!dayMatch) return false;
         const notFormSelected = !formSelectedSlots.has(t._id);
-        const notFacultyBooked = !Array.from(facultyBookings.keys()).some(
-          (key) => key.endsWith("-" + t._id)
-        );
-        const notClassroomBooked = !Array.from(classroomBookings.keys()).some(
-          (key) => key.endsWith("-" + t._id)
-        );
-        return (
-          dayMatch && notFormSelected && notFacultyBooked && notClassroomBooked
-        );
+        const notLocallyBooked = !localBookedSlots.has(t._id);
+        return notFormSelected && notLocallyBooked;
       })
       .sort((a, b) => {
         const dayOrder = DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
@@ -499,27 +576,15 @@ export const TimetableForm = ({ onSave, onCancel }) => {
   };
 
   const getBreakConflictSlots = () => {
-    const formSelectedSlots = getAllSelectedSlotsInForm();
+    const formSelectedSlots = getFormSelectedSlots();
     const conflicts = new Set(formSelectedSlots);
-
-    timeSlots.forEach((slot) => {
-      if (bulkFormData.selectedDays.includes(slot.day)) {
-        if (bookedSlots.has(slot._id)) conflicts.add(slot._id);
-        if (
-          Array.from(facultyBookings.keys()).some((key) =>
-            key.endsWith("-" + slot._id)
-          )
-        )
-          conflicts.add(slot._id);
-        if (
-          Array.from(classroomBookings.keys()).some((key) =>
-            key.endsWith("-" + slot._id)
-          )
-        )
-          conflicts.add(slot._id);
+    const studentKeyPrefix = `${bulkFormData.year}-${bulkFormData.semester}-${bulkFormData.section}-`;
+    studentBookings.forEach((batches, key) => {
+      if (key.startsWith(studentKeyPrefix)) {
+        const slotId = key.substring(studentKeyPrefix.length);
+        conflicts.add(slotId);
       }
     });
-
     return Array.from(conflicts);
   };
 
@@ -534,8 +599,11 @@ export const TimetableForm = ({ onSave, onCancel }) => {
     label: "Semester " + s,
     value: s,
   }));
+  const sectionOptions = SECTIONS.map((s) => ({
+    label: "Section " + s,
+    value: s,
+  }));
   const dayOptions = DAYS.map((d) => ({ label: d, value: d }));
-  const batchOptions = BATCHES.map((b) => ({ label: "Batch " + b, value: b }));
 
   if (loading && subjects.length === 0) {
     return (
@@ -550,18 +618,17 @@ export const TimetableForm = ({ onSave, onCancel }) => {
     <div ref={formRef} className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-2">Bulk Timetable Scheduler</h2>
       <p className="text-gray-600 mb-6">
-        Schedule all subjects for a semester at once (cross-year conflicts
-        prevented)
+        Schedule all components for a semester at once.
       </p>
 
+      {/* --- STEP 1 --- */}
       {step === 1 && (
         <form className="space-y-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-bold text-gray-800 mb-4">
-              Step 1: Select Year, Semester & Days
+              Step 1: Select Year, Semester, Section & Days
             </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Select
                 label="Year *"
                 name="year"
@@ -578,25 +645,37 @@ export const TimetableForm = ({ onSave, onCancel }) => {
                 options={semesterOptions}
                 required
               />
-              <div>
-                <MultiSelect
-                  label="Days *"
-                  name="selectedDays"
-                  value={bulkFormData.selectedDays}
-                  onChange={handleStep1MultiChange}
-                  options={dayOptions}
-                  required
-                />
-              </div>
+              <Select
+                label="Section *"
+                name="section"
+                value={bulkFormData.section}
+                onChange={handleStep1Change}
+                options={sectionOptions}
+                required
+              />
+              <MultiSelect
+                label="Working Days *"
+                name="selectedDays"
+                value={bulkFormData.selectedDays}
+                onChange={handleStep1MultiChange}
+                options={dayOptions}
+                required
+              />
             </div>
 
-            {(errors.year || errors.semester || errors.selectedDays) && (
+            {(errors.year ||
+              errors.semester ||
+              errors.section ||
+              errors.selectedDays) && (
               <div className="mt-4 p-3 bg-red-100 border border-red-300 rounded">
                 {errors.year && (
                   <p className="text-red-700 text-sm">{errors.year}</p>
                 )}
                 {errors.semester && (
                   <p className="text-red-700 text-sm">{errors.semester}</p>
+                )}
+                {errors.section && (
+                  <p className="text-red-700 text-sm">{errors.section}</p>
                 )}
                 {errors.selectedDays && (
                   <p className="text-red-700 text-sm">{errors.selectedDays}</p>
@@ -607,8 +686,7 @@ export const TimetableForm = ({ onSave, onCancel }) => {
             {bulkFormData.year && bulkFormData.semester && (
               <div className="mt-4 p-3 bg-green-100 border border-green-300 rounded">
                 <p className="text-green-700 font-semibold">
-                  Found {filteredSubjects.length} subjects for Year{" "}
-                  {bulkFormData.year}, Semester {bulkFormData.semester}
+                  Found {filteredSubjects.length} subjects for this selection.
                 </p>
               </div>
             )}
@@ -620,7 +698,11 @@ export const TimetableForm = ({ onSave, onCancel }) => {
               <Button
                 type="button"
                 onClick={handleProceedToStep2}
-                disabled={!bulkFormData.year || !bulkFormData.semester}
+                disabled={
+                  !bulkFormData.year ||
+                  !bulkFormData.semester ||
+                  !bulkFormData.section
+                }
               >
                 Continue to Schedule Subjects
               </Button>
@@ -629,11 +711,14 @@ export const TimetableForm = ({ onSave, onCancel }) => {
         </form>
       )}
 
+      {/* --- STEP 2 --- */}
       {step === 2 && (
         <form className="space-y-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-gray-800">
-              Step 2: Schedule {filteredSubjects.length} Subjects
+              Step 2: Schedule {filteredSubjects.length} Subjects for Y
+              {bulkFormData.year}-S{bulkFormData.semester} (Section{" "}
+              {bulkFormData.section})
             </h3>
             <Button
               type="button"
@@ -645,223 +730,182 @@ export const TimetableForm = ({ onSave, onCancel }) => {
           </div>
 
           {filteredSubjects.map((subject, idx) => {
-            const schedule = subjectSchedules[subject._id] || {};
-            const requiredHours = calculateRequiredHours(subject);
-            const subjectFaculties = getFacultiesForSubject(subject._id);
-            const availableClassrooms = getClassroomsForType(
-              schedule.subjectType
-            );
-            const availableTimeSlots = getTimeSlotsForDays(
-              schedule.days || bulkFormData.selectedDays,
-              schedule.faculty,
-              schedule.classroom
-            );
-            const bookedSlotsForDays = getBookedSlotsForDays(
-              schedule.days || bulkFormData.selectedDays,
-              schedule.faculty,
-              schedule.classroom
-            );
-            const subjectError = errors[subject._id];
+            const schedule = subjectSchedules[subject._id];
+            if (!schedule || !schedule.entries) return null;
 
             return (
               <div
                 key={subject._id}
-                className={`p-4 rounded-lg border-l-4 ${
-                  subjectError
-                    ? "bg-red-50 border-red-500"
-                    : "bg-gray-50 border-blue-500"
-                }`}
+                className="p-4 rounded-lg bg-gray-50 border border-gray-200"
               >
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="font-bold text-gray-800">
-                      {idx + 1}. {subject.subjectCode} - {subject.name}
-                    </h4>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {subject.creditHours} credit(s)
-                      {schedule.subjectType === "P"
-                        ? ` → ${requiredHours} hours per batch`
-                        : ` → ${requiredHours} hours total`}
-                    </p>
-                  </div>
-                  {subjectError && (
-                    <div className="text-red-600 font-semibold text-sm">
-                      Error
-                    </div>
-                  )}
+                <h4 className="font-bold text-lg text-blue-700 mb-4">
+                  {idx + 1}. {subject.subjectCode} - {subject.name}
+                </h4>
+
+                <div className="space-y-4">
+                  {schedule.entries.map((entry, entryIdx) => {
+                    const subjectFaculties = getFacultiesForSubject(
+                      subject._id
+                    );
+                    const availableClassrooms = getClassroomsForType(
+                      entry.entryType
+                    );
+
+                    const availableTimeSlots = getAvailableTimeSlots(
+                      subject._id,
+                      entry.id,
+                      entry
+                    );
+
+                    const slotOptions = availableTimeSlots.map((t) => ({
+                      label: `${t.day} P${t.periodNumber}: ${t.startTime}-${t.endTime}`,
+                      value: t._id,
+                    }));
+
+                    const valueForSelect = entry.timeSlots;
+                    const label = `Time Slots (Select ${entry.requiredHours} slot(s))`;
+
+                    const bookedSlotsForDays = getBookedSlotsForDays(
+                      subject._id,
+                      entry.id,
+                      entry
+                    );
+
+                    const errorKey = `${subject._id}-${entry.id}`;
+                    const entryError = errors[errorKey];
+
+                    return (
+                      <Fragment key={entry.id}>
+                        {entryIdx > 0 && <hr className="border-gray-300" />}
+                        <div
+                          id={`entry-${errorKey}`}
+                          className={`p-3 rounded-lg border-l-4 ${entryError ? "bg-red-50 border-red-500" : "bg-white border-blue-500"}`}
+                        >
+                          <h5 className="font-semibold text-gray-800">
+                            {entry.entryType}{" "}
+                            <span className="text-purple-600">
+                              ({entry.batch})
+                            </span>
+                          </h5>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                            <Select
+                              label="Faculty"
+                              name={`faculty_${entry.id}`}
+                              value={entry.faculty}
+                              onChange={(e) =>
+                                handleEntryChange(
+                                  subject._id,
+                                  entry.id,
+                                  "faculty",
+                                  e.target.value
+                                )
+                              }
+                              options={subjectFaculties.map((f) => ({
+                                label: f.name + " (" + f.facultyID + ")",
+                                value: f._id,
+                              }))}
+                            />
+                            <Select
+                              label="Classroom / Lab"
+                              name={`classroom_${entry.id}`}
+                              value={entry.classroom}
+                              onChange={(e) =>
+                                handleEntryChange(
+                                  subject._id,
+                                  entry.id,
+                                  "classroom",
+                                  e.target.value
+                                )
+                              }
+                              options={availableClassrooms.map((c) => ({
+                                label: c.roomNumber + " (" + c.type + ")",
+                                value: c._id,
+                              }))}
+                            />
+                            <MultiSelect
+                              label="Days (override)"
+                              name={`days_${entry.id}`}
+                              value={entry.days}
+                              onChange={(e) =>
+                                handleEntryChange(
+                                  subject._id,
+                                  entry.id,
+                                  "days",
+                                  e.target.value
+                                )
+                              }
+                              options={bulkFormData.selectedDays.map((d) => ({
+                                label: d,
+                                value: d,
+                              }))}
+                              placeholder="Default (all selected days)"
+                            />
+                            <MultiSelect
+                              label={label}
+                              name={`timeSlots_${entry.id}`}
+                              value={valueForSelect}
+                              onChange={(e) =>
+                                handleEntryChange(
+                                  subject._id,
+                                  entry.id,
+                                  "timeSlots",
+                                  e.target.value
+                                )
+                              }
+                              options={slotOptions}
+                              highlightConflict={true}
+                              conflictSlots={bookedSlotsForDays}
+                            />
+                          </div>
+
+                          <div className="mt-3 p-2 bg-gray-100 rounded text-sm">
+                            <span className="font-semibold">
+                              Selected: {entry.timeSlots.length} /{" "}
+                              {entry.requiredHours} slots
+                            </span>
+                            {entry.timeSlots.length === entry.requiredHours && (
+                              <span className="ml-2 text-green-600">✅</span>
+                            )}
+                            {entry.timeSlots.length < entry.requiredHours && (
+                              <span className="ml-2 text-orange-600">
+                                Need{" "}
+                                {entry.requiredHours - entry.timeSlots.length}{" "}
+                                more
+                              </span>
+                            )}
+                            {entry.timeSlots.length > entry.requiredHours && (
+                              <span className="ml-2 text-red-600">
+                                Too many
+                              </span>
+                            )}
+                          </div>
+
+                          {entryError && (
+                            <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded">
+                              {/* ✅ FIX: Corrected closing tag */}
+                              <p className="text-red-700 text-sm">
+                                {entryError}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </Fragment>
+                    );
+                  })}
                 </div>
-
-                {Array.isArray(subject.type) && subject.type.length > 1 ? (
-                  <Select
-                    label="Type"
-                    name={`type_${subject._id}`}
-                    value={schedule.subjectType}
-                    onChange={(e) =>
-                      handleSubjectScheduleChange(
-                        subject._id,
-                        "subjectType",
-                        e.target.value
-                      )
-                    }
-                    options={subject.type.map((t) => ({
-                      label:
-                        t === "L"
-                          ? "Lecture"
-                          : t === "T"
-                            ? "Tutorial"
-                            : "Practical",
-                      value: t,
-                    }))}
-                  />
-                ) : (
-                  <div className="mb-3 p-2 bg-blue-100 rounded text-sm text-blue-700">
-                    <span className="font-semibold">Type:</span>{" "}
-                    {schedule.subjectType === "L"
-                      ? "Lecture"
-                      : schedule.subjectType === "T"
-                        ? "Tutorial"
-                        : "Practical"}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                  <Select
-                    label="Faculty"
-                    name={`faculty_${subject._id}`}
-                    value={schedule.faculty}
-                    onChange={(e) =>
-                      handleSubjectScheduleChange(
-                        subject._id,
-                        "faculty",
-                        e.target.value
-                      )
-                    }
-                    options={subjectFaculties.map((f) => ({
-                      label: f.name + " (" + f.facultyID + ")",
-                      value: f._id,
-                    }))}
-                  />
-
-                  <Select
-                    label="Classroom"
-                    name={`classroom_${subject._id}`}
-                    value={schedule.classroom}
-                    onChange={(e) =>
-                      handleSubjectScheduleChange(
-                        subject._id,
-                        "classroom",
-                        e.target.value
-                      )
-                    }
-                    options={availableClassrooms.map((c) => ({
-                      label: c.roomNumber + " (" + c.type + ")",
-                      value: c._id,
-                    }))}
-                  />
-
-                  {schedule.subjectType === "P" && (
-                    <Select
-                      label="Batch"
-                      name={`batch_${subject._id}`}
-                      value={schedule.batch}
-                      onChange={(e) =>
-                        handleSubjectScheduleChange(
-                          subject._id,
-                          "batch",
-                          e.target.value
-                        )
-                      }
-                      options={batchOptions}
-                    />
-                  )}
-
-                  <MultiSelect
-                    label="Days"
-                    name={`days_${subject._id}`}
-                    value={schedule.days}
-                    onChange={(e) =>
-                      handleSubjectMultiSelect(
-                        subject._id,
-                        "days",
-                        e.target.value
-                      )
-                    }
-                    options={bulkFormData.selectedDays.map((d) => ({
-                      label: d,
-                      value: d,
-                    }))}
-                  />
-
-                  <MultiSelect
-                    label={`Time Slots (Select ${requiredHours})`}
-                    name={`timeSlots_${subject._id}`}
-                    value={schedule.timeSlots}
-                    onChange={(e) =>
-                      handleSubjectMultiSelect(
-                        subject._id,
-                        "timeSlots",
-                        e.target.value
-                      )
-                    }
-                    options={availableTimeSlots
-                      .sort((a, b) => {
-                        const dayOrder =
-                          DAYS.indexOf(a.day) - DAYS.indexOf(b.day);
-                        if (dayOrder !== 0) return dayOrder;
-                        return a.periodNumber - b.periodNumber;
-                      })
-                      .map((t) => ({
-                        label:
-                          t.day +
-                          " P" +
-                          t.periodNumber +
-                          ": " +
-                          t.startTime +
-                          "-" +
-                          t.endTime,
-                        value: t._id,
-                      }))}
-                    highlightConflict={true}
-                    conflictSlots={bookedSlotsForDays}
-                  />
-                </div>
-
-                {schedule.timeSlots.length > 0 && (
-                  <div className="mt-3 p-2 bg-gray-100 rounded text-sm">
-                    <span className="font-semibold">
-                      Selected: {schedule.timeSlots.length} / {requiredHours}{" "}
-                      slots
-                    </span>
-                    {schedule.timeSlots.length === requiredHours && (
-                      <span className="ml-2 text-green-600">✅</span>
-                    )}
-                    {schedule.timeSlots.length < requiredHours && (
-                      <span className="ml-2 text-orange-600">
-                        Need {requiredHours - schedule.timeSlots.length} more
-                      </span>
-                    )}
-                    {schedule.timeSlots.length > requiredHours && (
-                      <span className="ml-2 text-red-600">Too many</span>
-                    )}
-                  </div>
-                )}
-
-                {subjectError && (
-                  <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded">
-                    <p className="text-red-700 text-sm">{subjectError}</p>
-                  </div>
-                )}
               </div>
             );
           })}
 
+          {/* --- Break Section --- */}
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <h3 className="font-bold text-gray-800 mb-4">
               Break Times (Optional)
             </h3>
+            {/* ✅ FIX: Corrected closing tag */}
             <p className="text-sm text-gray-600 mb-3">
-              Select time slots to mark as breaks for the entire semester
-              (excludes cross-year bookings)
+              Select time slots to mark as breaks for this entire selection.
             </p>
             <MultiSelect
               label="Mark as Breaks"
@@ -873,13 +917,9 @@ export const TimetableForm = ({ onSave, onCancel }) => {
               highlightConflict={true}
               conflictSlots={getBreakConflictSlots()}
             />
-            {bulkFormData.selectedBreaks.length > 0 && (
-              <p className="text-xs text-gray-500 mt-2">
-                {bulkFormData.selectedBreaks.length} break slot(s) selected
-              </p>
-            )}
           </div>
 
+          {/* --- Submit Buttons --- */}
           <div className="flex justify-end gap-4 mt-6 sticky bottom-0 bg-white p-4 rounded border-t">
             <Button
               type="button"
@@ -889,9 +929,7 @@ export const TimetableForm = ({ onSave, onCancel }) => {
               Back
             </Button>
             <Button type="button" onClick={handleSubmitAll} disabled={loading}>
-              {loading
-                ? "Creating..."
-                : `Create All ${filteredSubjects.length} Entries`}
+              {loading ? "Creating..." : `Create All Entries`}
             </Button>
           </div>
         </form>

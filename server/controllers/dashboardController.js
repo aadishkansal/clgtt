@@ -55,20 +55,21 @@ export const getYearDashboard = async (req, res, next) => {
       .populate("schedule.subjectCode", "subjectCode name type")
       .populate("schedule.facultyID", "name facultyID")
       .populate("schedule.classroomID", "roomNumber block capacity type")
-      .populate("schedule.timeslotID", "day startTime endTime periodNumber");
+      .populate("schedule.timeslotID", "day startTime endTime periodNumber")
+      .populate("breaks.timeslotID", "day startTime endTime periodNumber"); // <-- ✅ ADD THIS LINE
 
     console.log(
-      `ðŸ“Š Found ${timetables.length} timetables for Year ${year}, Semester ${semester}`
+      `Found ${timetables.length} timetables for Year ${year}, Semester ${semester}`
     );
 
     res.status(200).json({
       success: true,
       count: timetables.length,
-      data: timetables, // âœ… Unified response format
-      timetables, // âœ… Keep for backward compatibility
+      data: timetables,
+      timetables,
     });
   } catch (error) {
-    console.error("âŒ Error fetching year dashboard:", error);
+    console.error("Error fetching year dashboard:", error);
     next(error);
   }
 };

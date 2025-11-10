@@ -16,6 +16,7 @@ export const facultyValidator = [
   body("email").trim().isEmail().withMessage("Please provide a valid email"),
 ];
 
+// ✅ --- THIS IS THE CORRECTED VALIDATOR ---
 export const subjectValidator = [
   body("subjectCode")
     .trim()
@@ -41,10 +42,9 @@ export const subjectValidator = [
   body("semester")
     .notEmpty()
     .withMessage("Semester is required")
-    .isInt({ min: 1, max: 8 })
+    .isInt({ min: 1, max: 8 }) // This is correct
     .withMessage("Semester must be between 1 and 8"),
 
-  // Fixed: type should be an array
   body("type")
     .notEmpty()
     .withMessage("Type is required")
@@ -64,16 +64,28 @@ export const subjectValidator = [
       return true;
     }),
 
-  body("creditHours")
-    .notEmpty()
-    .withMessage("Credit hours are required")
-    .isInt({ min: 1, max: 10 })
-    .withMessage("Credit hours must be between 1 and 10"),
+  // ⛔️ REMOVED: The old 'creditHours' validator that was causing the error
 
+  // ✅ ADDED: New validators for the '...Credits' fields
+  body("lectureCredits")
+    .optional()
+    .isInt({ min: 0, max: 10 })
+    .withMessage("Lecture credits must be a number between 0 and 10"),
+
+  body("tutorialCredits")
+    .optional()
+    .isInt({ min: 0, max: 10 })
+    .withMessage("Tutorial credits must be a number between 0 and 10"),
+
+  body("practicalCredits")
+    .optional()
+    .isInt({ min: 0, max: 10 })
+    .withMessage("Practical credits must be a number between 0 and 10"),
+
+  // ✅ UPDATED: Made 'department' optional to match the form
   body("department")
+    .optional({ checkFalsy: true }) // Allows empty strings
     .trim()
-    .notEmpty()
-    .withMessage("Department is required")
     .isLength({ min: 2, max: 50 })
     .withMessage("Department must be between 2 and 50 characters"),
 ];
@@ -133,8 +145,9 @@ export const timetableValidator = [
     .withMessage("Classroom must be a valid ID"),
 
   body("batch")
-    .isIn(["B1", "B2", "Full"])
-    .withMessage("Batch must be B1, B2, or Full"),
+    // ✅ UPDATED: Added B3 to match your other file
+    .isIn(["B1", "B2", "B3", "Full"])
+    .withMessage("Batch must be B1, B2, B3, or Full"),
 
   body("days")
     .notEmpty()
