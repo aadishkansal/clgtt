@@ -17,7 +17,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// ✅ FIXED CORS - Accept all localhost ports
+// FIXED CORS - Accept all localhost ports
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -66,15 +66,11 @@ app.use(errorHandler);
 // Connect DB and start server
 connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`\n${"=".repeat(50)}`);
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
-    console.log(`📡 CORS enabled for all localhost ports`);
-    console.log(`${"=".repeat(50)}\n`);
+
   });
 });
 
 process.on("unhandledRejection", (err) => {
-  console.error("❌ Unhandled Rejection:", err.message);
+
   process.exit(1);
 });

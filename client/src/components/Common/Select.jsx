@@ -10,13 +10,7 @@ export const Select = ({
   children,
 }) => {
   const handleChange = (e) => {
-    console.log(`SELECT CHANGE - ${name}:`, {
-      oldValue: value,
-      newValue: e.target.value,
-      eventValue: e.target.value,
-    });
-
-    // âœ… IMPORTANT: Call onChange with full event object
+    // Call onChange with full event object
     if (onChange) {
       onChange(e);
     }
@@ -32,8 +26,8 @@ export const Select = ({
       )}
       <select
         name={name}
-        value={value || ""} // âœ… Ensure value is string
-        onChange={handleChange} // âœ… Proper event handler
+        value={value || ""} // Ensure value is string
+        onChange={handleChange}
         disabled={disabled}
         required={required}
         className="px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer hover:border-blue-400"
@@ -42,16 +36,11 @@ export const Select = ({
 
         {options && options.length > 0 && !children
           ? options.map((option) => {
-              // âœ… Ensure option values are strings for comparison
+              // Ensure option values are strings for comparison
               const optionValue = String(option.value);
-              const isSelected = String(value || "") === optionValue;
 
               return (
-                <option
-                  key={option.value}
-                  value={optionValue}
-                  selected={isSelected}
-                >
+                <option key={option.value} value={optionValue}>
                   {option.label}
                 </option>
               );

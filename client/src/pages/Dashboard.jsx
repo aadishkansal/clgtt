@@ -1,4 +1,4 @@
-import { useState, useEffect,} from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { YearTabs } from "../components/Dashboard/YearTabs";
 import { WeeklyGrid } from "../components/Dashboard/WeeklyGrid";
 import { ConflictSummary } from "../components/Dashboard/ConflictSummary";
@@ -7,35 +7,85 @@ import api from "../utils/api";
 import { handleApiError } from "../utils/helpers";
 import { toast } from "react-toastify";
 
+const DEPARTMENTS = [
+  "Computer Science & Engineering",
+  "Information Technology",
+  "Electronics & Communication",
+  "Electronics & Instrumentation",
+  "Electrical Engineering",
+  "Mechanical Engineering",
+  "Civil Engineering",
+  "Artificial Intelligence & DS",
+];
+
 export const Dashboard = () => {
+  // Default to the first department since "All" is removed
+  const [selectedDepartment, setSelectedDepartment] = useState(DEPARTMENTS[3]);
   const [selectedYear, setSelectedYear] = useState(2);
-  const [selectedSemester, setSelectedSemester] = useState(1);
+  const [selectedSemester, setSelectedSemester] = useState(3);
   const [timetableData, setTimetableData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [downloadingId, setDownloadingId] = useState(null);
-  const [downloadingAll, setDownloadingAll] = useState(false); // NEW
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get(`/dashboard/year/${selectedYear}`, {
-          params: { semester: selectedSemester },
-        });
-        const data = response.data.data || response.data.timetables || [];
-        setTimetableData(Array.isArray(data) ? data : []);
-      } catch (error) {
-        toast.error(handleApiError(error) || "Failed to load dashboard");
-        setTimetableData([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Helper to get valid semesters for a year
+  const getSemestersForYear = (year) => {
+    const y = parseInt(year);
+    if (y === 1) return [1, 2];
+    if (y === 2) return [3, 4];
+    if (y === 3) return [5, 6];
+    if (y === 4) return [7, 8];
+    return [];
+  };
 
-    loadDashboardData();
+  // Handle Year Change with Auto-Semester Reset
+  const handleYearChange = (year) => {
+    setSelectedYear(year);
+    const validSemesters = getSemestersForYear(year);
+    if (!validSemesters.includes(selectedSemester)) {
+      setSelectedSemester(validSemesters[0]);
+    }
+  };
+
+  const loadDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await api.get(`/dashboard/year/${selectedYear}`, {
+        params: { semester: selectedSemester },
+      });
+      const data = response.data.data || response.data.timetables || [];
+      setTimetableData(Array.isArray(data) ? data : []);
+    } catch (error) {
+      toast.error(handleApiError(error) || "Failed to load dashboard");
+      setTimetableData([]);
+    } finally {
+      setLoading(false);
+    }
   }, [selectedYear, selectedSemester]);
 
-  // Download single PDF
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  const filteredTimetables = useMemo(() => {
+    return timetableData.filter((t) => t.department === selectedDepartment);
+  }, [timetableData, selectedDepartment]);
+
+  const handleDeleteTimetable = async (id) => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this entire timetable? This cannot be undone."
+      )
+    ) {
+      try {
+        await api.delete(`/timetable/${id}/full`);
+        toast.success("Timetable deleted successfully");
+        loadDashboardData();
+      } catch (error) {
+        toast.error(handleApiError(error));
+      }
+    }
+  };
+
   const handleDownloadPDF = async (timetableId) => {
     try {
       setDownloadingId(timetableId);
@@ -53,48 +103,17 @@ export const Dashboard = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(url);
       toast.success("📄 PDF downloaded!");
     } catch (error) {
-      toast.error(handleApiError(error) || "Failed to download PDF");
+      toast.error(handleApiError(error));
     } finally {
       setDownloadingId(null);
     }
   };
 
-  // NEW: Download unified PDF
-  const handleDownloadAllPDF = async () => {
-    try {
-      setDownloadingAll(true);
-      const response = await api.get(
-        `/dashboard/year/${selectedYear}/download-all-pdf`,
-        {
-          params: { semester: selectedSemester },
-          responseType: "blob",
-        }
-      );
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute(
-        "download",
-        `timetable-Y${selectedYear}-S${selectedSemester}-All-${Date.now()}.pdf`
-      );
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success("📄 Unified PDF downloaded!");
-    } catch (error) {
-      toast.error(handleApiError(error) || "Failed to download unified PDF");
-    } finally {
-      setDownloadingAll(false);
-    }
-  };
-
   if (loading) return <Loader />;
 
-  const flattenedSchedule = timetableData.flatMap((t) =>
+  const flattenedSchedule = filteredTimetables.flatMap((t) =>
     (t.schedule || []).map((s, idx) => ({
       ...s,
       timetableId: t._id,
@@ -102,7 +121,7 @@ export const Dashboard = () => {
     }))
   );
 
-  const allBreaks = timetableData.flatMap((t) =>
+  const allBreaks = filteredTimetables.flatMap((t) =>
     (t.breaks || []).map((b) => {
       const ts = b.timeslotID || {};
       return {
@@ -110,12 +129,16 @@ export const Dashboard = () => {
         day: ts.day,
         startTime: ts.startTime,
         endTime: ts.endTime,
+        label: b.label || "Break",
       };
     })
   );
 
-  const allConflicts = Array.isArray(timetableData)
-    ? timetableData.reduce((acc, t) => [...acc, ...(t.conflicts || [])], [])
+  const allConflicts = Array.isArray(filteredTimetables)
+    ? filteredTimetables.reduce(
+        (acc, t) => [...acc, ...(t.conflicts || [])],
+        []
+      )
     : [];
 
   return (
@@ -129,17 +152,12 @@ export const Dashboard = () => {
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Stats Cards - Removed Published Card */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
           label="Total Timetables"
-          value={timetableData.length}
+          value={filteredTimetables.length}
           color="blue"
-        />
-        <StatCard
-          label="Published"
-          value={timetableData.filter((t) => t.isPublished).length}
-          color="green"
         />
         <StatCard
           label="Total Classes"
@@ -149,115 +167,121 @@ export const Dashboard = () => {
         <StatCard label="Total Breaks" value={allBreaks.length} color="red" />
       </div>
 
-      {/* Year Selection */}
-      <YearTabs selectedYear={selectedYear} onYearChange={setSelectedYear} />
-
-      {/* Semester Selection */}
-      <div className="flex gap-4 flex-wrap">
-        {[1, 2,3,4,5,6,7,8].map((sem) => (
-          <button
-            key={sem}
-            onClick={() => setSelectedSemester(sem)}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all text-sm ${
-              selectedSemester === sem
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
-          >
-            Sem {sem}
-          </button>
-        ))}
-      </div>
-
-      {/* Unified PDF Download */}
-      {timetableData.length > 0 && (
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-gray-800">
-                📚 Download Complete Timetable
-              </h3>
-              <p className="text-sm text-gray-600">
-                Download all {timetableData.length} sections in one PDF
-              </p>
-            </div>
-            <button
-              onClick={handleDownloadAllPDF}
-              disabled={downloadingAll}
-              className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 ${
-                downloadingAll
-                  ? "bg-gray-400 text-white cursor-not-allowed"
-                  : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
-              }`}
-            >
-              {downloadingAll ? (
-                <>
-                  <span className="animate-spin">⏳</span> Generating...
-                </>
-              ) : (
-                <>📄 Download All PDF</>
-              )}
-            </button>
-          </div>
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Year
+          </label>
+          <YearTabs
+            selectedYear={selectedYear}
+            onYearChange={handleYearChange}
+          />
         </div>
-      )}
-
-      {/* Individual Timetable Cards */}
-      {timetableData.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">
-            📋 Individual Timetables
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {timetableData.map((timetable) => (
-              <div
-                key={timetable._id}
-                className="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition-all"
-              >
-                <p className="text-sm">
-                  <span className="font-semibold">Year:</span> {timetable.year}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Sem:</span>{" "}
-                  {timetable.semester}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Section:</span>{" "}
-                  {timetable.section}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Classes:</span>{" "}
-                  {timetable.schedule?.length || 0}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Breaks:</span>{" "}
-                  {timetable.breaks?.length || 0}
-                </p>
-                <p className="text-sm">
-                  <span className="font-semibold">Status:</span>{" "}
-                  {timetable.isPublished ? "✅ Published" : "⏳ Draft"}
-                </p>
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Semester
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {getSemestersForYear(selectedYear).map((sem) => (
                 <button
-                  onClick={() => handleDownloadPDF(timetable._id)}
-                  disabled={downloadingId === timetable._id}
-                  className={`w-full mt-3 py-2 px-3 rounded-lg font-semibold text-sm ${
-                    downloadingId === timetable._id
-                      ? "bg-gray-400 text-white cursor-not-allowed"
-                      : "bg-blue-600 text-white hover:bg-blue-700"
+                  key={sem}
+                  onClick={() => setSelectedSemester(sem)}
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm border transition-all ${
+                    selectedSemester === sem
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300"
                   }`}
                 >
-                  {downloadingId === timetable._id
-                    ? "⏳ Generating..."
-                    : "📄 Download Section PDF"}
+                  Sem {sem}
                 </button>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Filter by Department
+            </label>
+            <select
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 focus:ring-2 focus:ring-blue-500"
+            >
+              {/* Removed "All Departments" option */}
+              {DEPARTMENTS.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Removed Download All Button Section */}
+
+      {filteredTimetables.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTimetables.map((timetable) => (
+            <div
+              key={timetable._id}
+              className="border rounded-lg p-4 bg-white shadow-sm relative group hover:shadow-md transition-all"
+            >
+              <button
+                onClick={() => handleDeleteTimetable(timetable._id)}
+                className="absolute top-2 right-2 text-gray-400 hover:text-red-600 transition-colors"
+                title="Delete"
+              >
+                🗑️
+              </button>
+              {timetable.department && (
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                  {timetable.department}
+                </span>
+              )}
+              <div className="mt-3 space-y-1 text-sm text-gray-700">
+                <div className="flex justify-between">
+                  <span className="font-semibold">Year:</span>
+                  <span>{timetable.year}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold">Sem:</span>
+                  <span>{timetable.semester}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold">Section:</span>
+                  <span>{timetable.section}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-semibold">Status:</span>
+                  {timetable.isPublished ? (
+                    <span className="text-green-600 font-bold">
+                      ✅ Published
+                    </span>
+                  ) : (
+                    <span className="text-orange-500 font-bold">⏳ Draft</span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => handleDownloadPDF(timetable._id)}
+                disabled={downloadingId === timetable._id}
+                className="mt-4 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+              >
+                {downloadingId === timetable._id
+                  ? "Generating..."
+                  : "Download PDF"}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-10 bg-gray-50 rounded border border-dashed border-gray-300 text-gray-500">
+          No timetables found for the selected criteria.
         </div>
       )}
 
-      {/* Weekly Schedule & Conflict Summary */}
-      {flattenedSchedule.length > 0 ? (
+      {flattenedSchedule.length > 0 && (
         <>
           <WeeklyGrid
             schedule={flattenedSchedule}
@@ -268,29 +292,22 @@ export const Dashboard = () => {
             <ConflictSummary conflicts={allConflicts} />
           )}
         </>
-      ) : (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-          <p className="text-yellow-800 font-semibold">No Classes Found</p>
-          <p className="text-yellow-700 text-sm">
-            Year {selectedYear}, Semester {selectedSemester}
-          </p>
-        </div>
       )}
     </div>
   );
 };
 
 const StatCard = ({ label, value, color }) => {
-  const colorMap = {
-    blue: "bg-blue-100 text-blue-800 border-blue-300",
-    green: "bg-green-100 text-green-800 border-green-300",
-    yellow: "bg-yellow-100 text-yellow-800 border-yellow-300",
-    red: "bg-red-100 text-red-800 border-red-300",
+  const colors = {
+    blue: "bg-blue-50 text-blue-700 border-blue-200",
+    green: "bg-green-50 text-green-700 border-green-200",
+    yellow: "bg-yellow-50 text-yellow-700 border-yellow-200",
+    red: "bg-red-50 text-red-700 border-red-200",
   };
   return (
-    <div className={`border-l-4 rounded-lg p-6 ${colorMap[color]}`}>
-      <p className="text-sm font-medium opacity-75">{label}</p>
-      <p className="text-3xl font-bold">{value}</p>
+    <div className={`p-4 border rounded-lg ${colors[color]}`}>
+      <p className="text-sm opacity-80">{label}</p>
+      <p className="text-2xl font-bold">{value}</p>
     </div>
   );
 };

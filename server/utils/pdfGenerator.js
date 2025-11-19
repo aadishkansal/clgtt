@@ -1,14 +1,13 @@
 import PDFDocument from "pdfkit";
 
 export const generateTimetablePDF = async (timetableData) => {
-
-  console.log("PDF GENERATOR DATA:", JSON.stringify(timetableData, null, 2));
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: "A4",
         layout: "landscape",
-        margin: 20,
+        margin: 15,
+        bufferPages: true,
       });
       const chunks = [];
 
@@ -16,26 +15,42 @@ export const generateTimetablePDF = async (timetableData) => {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      // Header
-      doc
-        .fontSize(18)
-        .font("Helvetica-Bold")
-        .text("COLLEGE TIMETABLE", { align: "center" });
-      doc.moveDown(0.2);
+      // --- PAGE METRICS ---
+      const margin = 15;
+      const width = doc.page.width - 2 * margin;
+      const height = doc.page.height - 2 * margin;
 
+      let currentY = margin;
+
+      // --- 1. TITLE & HEADER ---
       doc
-        .fontSize(12)
-        .font("Helvetica")
-        .text(
-          `Year: ${timetableData.year} | Section: ${timetableData.section} | Academic Year: ${timetableData.academicYear}`,
-          { align: "center" }
-        );
+        .font("Helvetica-Bold")
+        .fontSize(14)
+        .text("Devi Ahilya Vishwavidyalaya, Indore", margin, currentY, {
+          align: "center",
+          width: width,
+        });
+      currentY += 18;
       doc
         .fontSize(11)
-        .text(`Semester: ${timetableData.semester}`, { align: "center" });
-      doc.moveDown(0.5);
+        .text("Institute of Engineering & Technology", margin, currentY, {
+          align: "center",
+          width: width,
+        });
+      currentY += 16;
 
-      // Organize data by day and time
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .text(
+          `Year: ${timetableData.year} | Semester: ${timetableData.semester} | Section: ${timetableData.section} | Department: ${timetableData.department || "N/A"} | Session: ${timetableData.academicYear || "2024-25"}`,
+          margin,
+          currentY,
+          { align: "center", width: width }
+        );
+      currentY += 15;
+
+      // --- 2. DATA PREPARATION ---
       const days = [
         "Monday",
         "Tuesday",
@@ -44,209 +59,306 @@ export const generateTimetablePDF = async (timetableData) => {
         "Friday",
         "Saturday",
       ];
-      const timeSlotMap = {}; // Organized by day and time
-      const breakMap = {}; // âœ… NEW - Track breaks
+      const timeSlotMap = new Map();
+      const gridData = {};
 
-      // âœ… NEW - Build break map organized by day and time
-      if (timetableData.breaks && Array.isArray(timetableData.breaks)) {
-        timetableData.breaks.forEach((breakEntry) => {
-          if (breakEntry.timeslot) {
-            const day = breakEntry.timeslot.day;
-            const time = breakEntry.timeslot.startTime;
-            const key = `${day}-${time}`;
-            breakMap[key] = true; // Mark as break
-            console.log(`ðŸ”— Break mapped: ${key}`);
-          }
-        });
-      }
+      const parseTime = (t) => {
+        if (!t) return 0;
+        const [h, m] = t.split(":").map(Number);
+        return h * 60 + m;
+      };
 
-      // âœ… Group all entries by day and time
-      if (timetableData.schedule && Array.isArray(timetableData.schedule)) {
+      // Process Schedule Entries
+      if (timetableData.schedule) {
         timetableData.schedule.forEach((entry) => {
           if (entry.timeslot) {
-            const day = entry.timeslot.day;
-            const time = entry.timeslot.startTime;
-            const key = `${day}-${time}`;
-
-            if (!timeSlotMap[key]) {
-              timeSlotMap[key] = {
-                day,
-                time,
-                startTime: entry.timeslot.startTime,
-                endTime: entry.timeslot.endTime,
-                entries: [],
-              };
+            const { day, startTime, endTime } = entry.timeslot;
+            if (!timeSlotMap.has(startTime)) {
+              timeSlotMap.set(startTime, { start: startTime, end: endTime });
             }
-
-            timeSlotMap[key].entries.push({
-              subject: entry.subject?.subjectCode || "N/A",
-              faculty: entry.faculty?.name || "N/A",
-              classroom: entry.classroom?.roomNumber || "N/A",
-              batch: entry.batchGroup || "Full",
-              isRMC: entry.isRMC || false,
-            });
+            const key = `${day}-${startTime}`;
+            if (!gridData[key]) gridData[key] = [];
+            gridData[key].push(entry);
           }
         });
       }
 
-      // Build timetable grid
-      const tableTop = 100;
-      const tableLeft = 20;
-      const colWidth = 110;
-      const rowHeight = 50;
+      // Process Breaks
+      if (timetableData.breaks) {
+        timetableData.breaks.forEach((b) => {
+          if (b.timeslot) {
+            const { day, startTime, endTime } = b.timeslot;
+            if (!timeSlotMap.has(startTime)) {
+              timeSlotMap.set(startTime, { start: startTime, end: endTime });
+            }
+            const key = `${day}-${startTime}`;
+            if (!gridData[key]) {
+              gridData[key] = [{ isBreak: true, label: b.label || "BREAK" }];
+            }
+          }
+        });
+      }
 
-      // Extract unique time slots
-      const uniqueTimeslots = [];
-      Object.values(timeSlotMap).forEach((slot) => {
-        if (!uniqueTimeslots.find((t) => t.time === slot.time)) {
-          uniqueTimeslots.push(slot);
-        }
-      });
+      const sortedTimes = Array.from(timeSlotMap.values()).sort(
+        (a, b) => parseTime(a.start) - parseTime(b.start)
+      );
 
-      // âœ… NEW - Also include break times in unique slots
-      Object.keys(breakMap).forEach((key) => {
-        const [day, time] = key.split("-");
-        if (!uniqueTimeslots.find((t) => t.time === time)) {
-          uniqueTimeslots.push({
-            day,
-            time,
-            startTime: time,
-            endTime: "", // Will calculate from next slot
-          });
-        }
-      });
+      // --- 3. GRID LAYOUT ---
+      const footerHeight = 150;
+      const availableHeightForGrid = height - currentY - footerHeight;
+      const minRowHeight = 35;
+      let rowHeight = availableHeightForGrid / (sortedTimes.length + 1);
+      if (rowHeight < minRowHeight) rowHeight = minRowHeight;
 
-      uniqueTimeslots.sort((a, b) => a.time.localeCompare(b.time));
+      const colWidth = width / 7;
 
-      // Draw header row
-      doc.fontSize(9).font("Helvetica-Bold");
-      doc.text("Time/Period", tableLeft, tableTop, {
-        width: colWidth - 5,
-        align: "center",
-      });
+      // --- 4. DRAW GRID HEADER ---
+      doc.lineWidth(0.5);
+      let x = margin;
 
-      days.forEach((day, i) => {
-        doc.text(day, tableLeft + (i + 1) * colWidth, tableTop, {
+      doc.rect(x, currentY, colWidth, 20).stroke();
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(10)
+        .text("Time / Day", x, currentY + 6, {
           width: colWidth,
           align: "center",
         });
+
+      days.forEach((day) => {
+        x += colWidth;
+        doc.rect(x, currentY, colWidth, 20).stroke();
+        doc.text(day, x, currentY + 6, { width: colWidth, align: "center" });
       });
+      currentY += 20;
 
-      // Draw header line
-      doc
-        .moveTo(tableLeft, tableTop + 18)
-        .lineTo(tableLeft + (days.length + 1) * colWidth, tableTop + 18)
-        .stroke();
+      // --- 5. DRAW GRID ROWS ---
+      sortedTimes.forEach((slot) => {
+        let rowY = currentY;
 
-      // Draw time slots
-      uniqueTimeslots.forEach((slot, rowIndex) => {
-        const yPos = tableTop + 25 + rowIndex * rowHeight;
+        doc.rect(margin, rowY, colWidth, rowHeight).stroke();
+        doc
+          .font("Helvetica-Bold")
+          .fontSize(10)
+          .text(
+            `${slot.start} - ${slot.end}`,
+            margin,
+            rowY + rowHeight / 2 - 4,
+            { width: colWidth, align: "center" }
+          );
 
-        // Time cell
-        doc.fontSize(8).font("Helvetica-Bold");
+        days.forEach((day, i) => {
+          const cellX = margin + (i + 1) * colWidth;
+          const key = `${day}-${slot.start}`;
+          const data = gridData[key] || [];
 
-        // âœ… NEW - Handle end time properly
-        const endTime =
-          slot.endTime ||
-          uniqueTimeslots[rowIndex + 1]?.startTime ||
-          slot.startTime;
-        doc.text(`${slot.startTime}-${endTime}`, tableLeft + 2, yPos + 15, {
-          width: colWidth - 4,
-          align: "center",
-        });
+          doc.rect(cellX, rowY, colWidth, rowHeight).stroke();
 
-        // Day cells
-        days.forEach((day, colIndex) => {
-          const xPos = tableLeft + (colIndex + 1) * colWidth;
-          const key = `${day}-${slot.startTime}`;
-          const slotData = timeSlotMap[key];
-          const isBreak = breakMap[key]; // âœ… NEW - Check if break
-
-          // âœ… NEW - Display BREAK if marked as break
-          if (isBreak && !slotData) {
-            doc
-              .fontSize(9)
-              .font("Helvetica-Bold")
-              .fillColor("red")
-              .text("BREAK", xPos + 2, yPos + 18, {
-                width: colWidth - 4,
-                align: "center",
-              });
-            doc.fillColor("black");
-          } else if (slotData && slotData.entries.length > 0) {
-            // âœ… NEW: Show ALL entries for this slot
-            let yOffset = yPos + 2;
-            doc.fontSize(7).font("Helvetica-Bold");
-
-            slotData.entries.forEach((entry, idx) => {
-              if (idx > 0) {
-                doc
-                  .fontSize(6)
-                  .font("Helvetica")
-                  .text("|", xPos + colWidth / 2 - 5, yOffset);
-                yOffset += 8;
-              }
-
+          if (data.length > 0) {
+            if (data[0].isBreak) {
               doc
-                .fontSize(7)
                 .font("Helvetica-Bold")
-                .text(entry.subject, xPos + 2, yOffset, {
-                  width: colWidth - 4,
+                .fontSize(10)
+                .fillColor("#555")
+                .text("BREAK", cellX, rowY + rowHeight / 2 - 4, {
+                  width: colWidth,
                   align: "center",
                 });
-              yOffset += 8;
+              doc.fillColor("black");
+            } else {
+              const count = data.length;
+              const subCellWidth = colWidth / count;
 
-              doc
-                .fontSize(6)
-                .font("Helvetica")
-                .text(entry.faculty, xPos + 2, yOffset, {
-                  width: colWidth - 4,
-                  align: "center",
-                });
-              yOffset += 7;
+              data.forEach((entry, idx) => {
+                const subX = cellX + idx * subCellWidth;
 
-              doc.text(
-                `${entry.classroom} (${entry.batch})`,
-                xPos + 2,
-                yOffset,
-                {
-                  width: colWidth - 4,
-                  align: "center",
+                if (idx > 0) {
+                  doc
+                    .moveTo(subX, rowY)
+                    .lineTo(subX, rowY + rowHeight)
+                    .stroke();
                 }
-              );
-              yOffset += 7;
 
-              if (entry.isRMC) {
+                const subjectCode = entry.subject?.subjectCode || "";
+                const facultyName = entry.faculty?.name || "";
+                const facultyInitials =
+                  facultyName !== "N/A"
+                    ? facultyName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                    : "";
+
+                const room = entry.classroom?.roomNumber || "";
+                const batch =
+                  entry.batchGroup === "Full"
+                    ? "(All)"
+                    : `(${entry.batchGroup})`;
+
+                const padding = 4;
+                let textY = rowY + padding;
+
                 doc
-                  .fillColor("red")
-                  .text("RMC", xPos + colWidth - 12, yPos + 2);
-                doc.fillColor("black");
-              }
-            });
+                  .font("Helvetica-Bold")
+                  .fontSize(10)
+                  .text(subjectCode, subX, textY, {
+                    width: subCellWidth,
+                    align: "center",
+                  });
+                textY += 9;
+
+                doc
+                  .font("Helvetica")
+                  .fontSize(8)
+                  .text(`${facultyInitials} [${room}]`, subX, textY, {
+                    width: subCellWidth,
+                    align: "center",
+                  });
+                textY += 8;
+
+                doc.fontSize(8).text(batch, subX, textY, {
+                  width: subCellWidth,
+                  align: "center",
+                });
+
+                if (entry.isRMC) {
+                  textY += 8;
+                  doc
+                    .fillColor("red")
+                    .text("RMC", subX, textY, {
+                      width: subCellWidth,
+                      align: "center",
+                    })
+                    .fillColor("black");
+                }
+              });
+            }
           }
-
-          // Draw cell border
-          doc.rect(xPos, yPos, colWidth, rowHeight).stroke();
         });
-
-        // Draw time cell border
-        doc.rect(tableLeft, yPos, colWidth, rowHeight).stroke();
+        currentY += rowHeight;
       });
 
-      // Footer
+      // --- 6. DRAW LEGEND (FIXED) ---
+      currentY += 10;
+
+      if (currentY + 100 > height + margin) {
+        doc.addPage();
+        currentY = margin;
+      }
+
+      const lCol1 = width * 0.15;
+      const lCol2 = width * 0.4;
+      const lCol3 = width * 0.15;
+      const lCol4 = width * 0.3;
+
+      doc.rect(margin, currentY, lCol1, 15).stroke();
+      doc.rect(margin + lCol1, currentY, lCol2, 15).stroke();
+      doc.rect(margin + lCol1 + lCol2, currentY, lCol3, 15).stroke();
+      doc.rect(margin + lCol1 + lCol2 + lCol3, currentY, lCol4, 15).stroke();
+
+      doc.font("Helvetica-Bold").fontSize(10);
+      doc.text("Sub Code", margin + 2, currentY + 4, {
+        width: lCol1,
+        align: "left",
+      });
+      doc.text("Subject Name", margin + lCol1 + 2, currentY + 4, {
+        width: lCol2,
+        align: "left",
+      });
+      doc.text("Marks (L-T-P)", margin + lCol1 + lCol2 + 2, currentY + 4, {
+        width: lCol3,
+        align: "center",
+      });
+      doc.text(
+        "Faculty Name (Key)",
+        margin + lCol1 + lCol2 + lCol3 + 2,
+        currentY + 4,
+        { width: lCol4, align: "left" }
+      );
+
+      currentY += 15;
+
+      const uniqueSubjects = new Map();
+      if (timetableData.schedule) {
+        timetableData.schedule.forEach((e) => {
+          if (e.subject && e.subject.subjectCode) {
+            const code = e.subject.subjectCode;
+            const facName = e.faculty?.name || "N/A";
+            const key = `${code}-${facName}`;
+
+            if (!uniqueSubjects.has(key)) {
+              // Ensure these exist and force Number type (this handles the "0 credits" issue)
+              const l = Number(e.subject.lectureCredits || 0);
+              const t = Number(e.subject.tutorialCredits || 0);
+              const p = Number(e.subject.practicalCredits || 0);
+
+              const initials =
+                facName !== "N/A"
+                  ? facName
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                  : "";
+
+              uniqueSubjects.set(key, {
+                code: code,
+                name: e.subject.name,
+                ltp: `${l}-${t}-${p}`, // This will now use the extracted numbers
+                faculty: `${facName} (${initials})`,
+              });
+            }
+          }
+        });
+      }
+
+      doc.font("Helvetica").fontSize(10);
+      uniqueSubjects.forEach((sub) => {
+        const rowH = 12;
+        if (currentY + rowH > height + margin) {
+          doc.addPage();
+          currentY = margin;
+        }
+
+        doc.rect(margin, currentY, lCol1, rowH).stroke();
+        doc.rect(margin + lCol1, currentY, lCol2, rowH).stroke();
+        doc.rect(margin + lCol1 + lCol2, currentY, lCol3, rowH).stroke();
+        doc
+          .rect(margin + lCol1 + lCol2 + lCol3, currentY, lCol4, rowH)
+          .stroke();
+
+        doc.text(sub.code, margin + 2, currentY + 3);
+        doc.text(sub.name.substring(0, 55), margin + lCol1 + 2, currentY + 3);
+        doc.text(sub.ltp, margin + lCol1 + lCol2, currentY + 3, {
+          align: "center",
+          width: lCol3,
+        });
+        doc.text(sub.faculty, margin + lCol1 + lCol2 + lCol3 + 2, currentY + 3);
+
+        currentY += rowH;
+      });
+
+      // --- 7. FOOTER ---
+      currentY += 5;
       doc
         .fontSize(8)
-        .font("Helvetica")
+        .font("Helvetica-Oblique")
         .text(
-          `Generated on: ${new Date().toLocaleDateString("en-IN")} | Total Entries: ${timetableData.schedule?.length || 0} | Breaks: ${timetableData.breaks?.length || 0}`,
-          tableLeft,
-          doc.page.height - 30,
-          { align: "center" }
+          "Note: Classes will be conducted only in allotted rooms & time, Mutual exchange of lectures is not permitted until the permission of Co-ordinator/HOD/Director",
+          margin,
+          currentY
         );
+
+      doc.text(
+        `Generated on: ${new Date().toLocaleDateString()}`,
+        margin,
+        currentY,
+        { align: "right", width: width }
+      );
 
       doc.end();
     } catch (error) {
-      console.error("âŒ PDF Generation Error:", error);
       reject(error);
     }
   });

@@ -9,8 +9,18 @@ import { handleApiError } from "../../utils/helpers";
 import { toast } from "react-toastify";
 
 const YEARS = [1, 2, 3, 4];
-// ✅ FIX: Expanded to all 8 semesters
-const SEMESTERS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+const DEPARTMENTS = [
+  "Computer Science & Engineering",
+  "Information Technology",
+  "Electronics & Communication",
+  "Electronics & Instrumentation",
+  "Electrical Engineering",
+  "Mechanical Engineering",
+  "Civil Engineering",
+  "Artificial Intelligence & DS",
+];
+
 const SUBJECT_TYPES = [
   { label: "Lecture (L)", value: "L" },
   { label: "Tutorial (T)", value: "T" },
@@ -49,12 +59,35 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
     }
   }, [subject]);
 
+  const getSemesterOptions = () => {
+    const year = parseInt(formData.year);
+    if (!year) return [];
+
+    let sems = [];
+    if (year === 1) sems = [1, 2];
+    else if (year === 2) sems = [3, 4];
+    else if (year === 3) sems = [5, 6];
+    else if (year === 4) sems = [7, 8];
+
+    return sems.map((s) => ({
+      label: `Semester ${s}`,
+      value: s,
+    }));
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
-    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    setFormData((prev) => {
+      const newData = { ...prev, [name]: value };
+      if (name === "year") {
+        newData.semester = "";
+      }
+      return newData;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -88,8 +121,6 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
           : 0,
       };
 
-      console.log("Submitting:", submitData);
-
       if (subject) {
         await api.put(`/subjects/${subject._id}`, submitData);
         toast.success("Subject updated successfully");
@@ -116,7 +147,6 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
       if (error.response?.data?.errors) {
         setErrors(error.response.data.errors);
       }
-      // This will show the actual validation message from Mongoose
       toast.error(error.response?.data?.message || handleApiError(error));
     } finally {
       setLoading(false);
@@ -137,7 +167,7 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             value={formData.subjectCode}
             onChange={handleChange}
             required
-            disabled={!!subject}
+            // ✅ REMOVED: disabled={!!subject}
             placeholder="e.g., 5EIRC2"
           />
           {errors.subjectCode && (
@@ -165,7 +195,7 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             onChange={handleChange}
             options={YEARS.map((y) => ({ label: `Year ${y}`, value: y }))}
             required
-            disabled={!!subject}
+            // ✅ REMOVED: disabled={!!subject}
           />
           {errors.year && (
             <p className="text-red-500 text-sm mt-1">{errors.year}</p>
@@ -177,29 +207,31 @@ export const SubjectForm = ({ subject = null, onSuccess }) => {
             name="semester"
             value={formData.semester}
             onChange={handleChange}
-            options={SEMESTERS.map((s) => ({
-              label: `Semester ${s}`,
-              value: s,
-            }))}
+            options={getSemesterOptions()}
             required
-            disabled={!!subject}
+            // ✅ UPDATED: Only disable if Year is not selected
+            disabled={!formData.year}
           />
           {errors.semester && (
             <p className="text-red-500 text-sm mt-1">{errors.semester}</p>
           )}
         </div>
+
         <div>
-          <Input
+          <Select
             label="Department"
             name="department"
             value={formData.department}
             onChange={handleChange}
-            placeholder="e.g., Electronics & Instrumentation"
+            options={DEPARTMENTS.map((d) => ({ label: d, value: d }))}
+            required
+            placeholder="Select Department"
           />
           {errors.department && (
             <p className="text-red-500 text-sm mt-1">{errors.department}</p>
           )}
         </div>
+
         <div>
           <MultiSelect
             label="Type"

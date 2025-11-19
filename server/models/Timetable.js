@@ -23,7 +23,7 @@ const scheduleEntrySchema = new mongoose.Schema({
   },
   batchGroup: {
     type: String,
-    enum: ["B1", "B2", "Full", null],
+    enum: ["B1", "B2", "Full", null], // Added just in case
     default: null,
   },
   isRMC: {
@@ -36,16 +36,13 @@ const scheduleEntrySchema = new mongoose.Schema({
   },
 });
 
-// âœ… NEW: Break entry schema
 const breakEntrySchema = new mongoose.Schema({
   timeslotID: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "TimeSlot",
     required: true,
   },
-  day: String,
-  startTime: String,
-  endTime: String,
+  label: String, // Added label for break name
   createdAt: {
     type: Date,
     default: Date.now,
@@ -88,6 +85,12 @@ const timetableSchema = new mongoose.Schema({
     required: [true, "Please provide academic year"],
     trim: true,
   },
+  // ✅ NEW: Added Department Field
+  department: {
+    type: String,
+    required: [true, "Please provide department"],
+    trim: true,
+  },
   semester: {
     type: Number,
     required: [true, "Please provide semester"],
@@ -108,7 +111,6 @@ const timetableSchema = new mongoose.Schema({
     uppercase: true,
   },
   schedule: [scheduleEntrySchema],
-  // âœ… NEW: Store break entries separately
   breaks: [breakEntrySchema],
   conflicts: [conflictSchema],
   isPublished: {

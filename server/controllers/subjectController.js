@@ -3,10 +3,7 @@ import Faculty from "../models/Faculty.js";
 
 export const getAllSubjects = async (req, res) => {
   try {
-    console.log("ðŸ“š Fetching all subjects...");
     const subjects = await Subject.find().populate("assignedFaculty");
-
-    console.log(`âœ… Found ${subjects.length} subjects`);
 
     res.json({
       success: true,
@@ -14,7 +11,6 @@ export const getAllSubjects = async (req, res) => {
       subjects,
     });
   } catch (error) {
-    console.error("âŒ Error fetching subjects:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching subjects",
@@ -59,15 +55,6 @@ export const createSubject = async (req, res, next) => {
       practicalCredits,
     } = req.body;
 
-    console.log("ðŸ“ Creating subject with:", {
-      subjectCode,
-      name,
-      type,
-      lectureCredits,
-      tutorialCredits,
-      practicalCredits,
-    });
-
     if (!subjectCode || !name || !year || !semester) {
       return res
         .status(400)
@@ -96,12 +83,10 @@ export const createSubject = async (req, res, next) => {
       assignedFaculty: [],
     });
 
-    console.log("âœ… Subject created:", newSubject._id);
     res
       .status(201)
       .json({ success: true, message: "Subject created", subject: newSubject });
   } catch (error) {
-    console.error("âŒ Error creating subject:", error.message);
     next(error);
   }
 };
@@ -109,6 +94,7 @@ export const createSubject = async (req, res, next) => {
 export const updateSubject = async (req, res, next) => {
   try {
     const {
+      subjectCode,
       name,
       year,
       semester,
@@ -126,23 +112,54 @@ export const updateSubject = async (req, res, next) => {
         .json({ success: false, message: "Subject not found" });
     }
 
+    // Handle Subject Code Update (with duplicate check)
+    if (subjectCode) {
+      const normalizedCode = subjectCode.toString().toUpperCase().trim();
+
+      // If the code is actually changing
+      if (normalizedCode !== subject.subjectCode) {
+        const existingSubject = await Subject.findOne({
+          subjectCode: normalizedCode,
+        });
+
+        // If found AND it's not the current subject we are editing
+        if (
+          existingSubject &&
+          existingSubject._id.toString() !== req.params.id
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: "Subject code already exists",
+          });
+        }
+        subject.subjectCode = normalizedCode;
+      }
+    }
+
+    // Handle other fields
     if (name) subject.name = name.trim();
     if (year) subject.year = parseInt(year);
     if (semester) subject.semester = parseInt(semester);
     if (department) subject.department = department.trim();
     if (type) subject.type = Array.isArray(type) ? type : [type];
 
-    if (lectureCredits != null)
+    // Handle credits (checking for null/undefined explicitly to allow 0)
+    if (lectureCredits !== undefined && lectureCredits !== null)
       subject.lectureCredits = parseInt(lectureCredits) || 0;
-    if (tutorialCredits != null)
+
+    if (tutorialCredits !== undefined && tutorialCredits !== null)
       subject.tutorialCredits = parseInt(tutorialCredits) || 0;
-    if (practicalCredits != null)
+
+    if (practicalCredits !== undefined && practicalCredits !== null)
       subject.practicalCredits = parseInt(practicalCredits) || 0;
 
     await subject.save();
-    res
-      .status(200)
-      .json({ success: true, message: "Subject updated", subject });
+
+    res.status(200).json({
+      success: true,
+      message: "Subject updated successfully",
+      subject,
+    });
   } catch (error) {
     next(error);
   }

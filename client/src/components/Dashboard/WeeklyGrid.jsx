@@ -11,6 +11,7 @@ const DAYS_OF_WEEK = [
   "Saturday",
 ];
 const TIME_SLOTS = [
+  "08:00-09:00",
   "09:00-10:00",
   "10:00-11:00",
   "11:00-12:00",
@@ -29,10 +30,9 @@ const buildBreakMap = (breaks = []) => {
     const t = b?.startTime?.trim();
     if (day && t) {
       const key = `${day}-${t}`;
-      map[key] = true;
+      map[key] = b; // Store the actual break object (contains _id)
     }
   });
-  console.log("🗺️ breakMap keys:", Object.keys(map).sort());
   return map;
 };
 
@@ -48,11 +48,10 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
   const getEntriesForSlot = (day, timeSlot) => {
     const startTime = timeSlot.split("-")[0];
     const matches = schedule.filter((entry) => {
-      // Use .filter()
       const ts = entry?.timeslotID;
       return ts?.day === day && ts?.startTime === startTime;
     });
-    return matches; // Return array
+    return matches;
   };
 
   const getConflictsForEntry = (entryId) => {
@@ -68,40 +67,31 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
     setSelectedEntry(entry);
     setIsModalOpen(true);
   };
+
   const handleBreakClick = (b) => {
     setSelectedBreak(b);
     setIsBreakModalOpen(true);
   };
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedEntry(null);
   };
+
   const handleCloseBreakModal = () => {
     setIsBreakModalOpen(false);
     setSelectedBreak(null);
   };
+
   const handleRefresh = () => window.location.reload();
 
   if (!Array.isArray(schedule) || schedule.length === 0) {
-    console.warn("⚠️ WeeklyGrid received empty schedule");
     return (
       <div className="bg-white rounded-lg shadow-md p-8 text-center">
         <p className="text-gray-500">No schedule data available</p>
       </div>
     );
   }
-
-  // One-time schedule preview
-  console.log(
-    "📋 schedule sample (first 5):",
-    schedule.slice(0, 5).map((s) => ({
-      id: s?._id,
-      day: s?.timeslotID?.day,
-      start: s?.timeslotID?.startTime,
-      subj: s?.subjectCode?.subjectCode,
-      batch: s?.batchGroup,
-    }))
-  );
 
   return (
     <>
@@ -134,18 +124,18 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
                     {timeSlot}
                   </td>
                   {DAYS_OF_WEEK.map((day) => {
-                    const entries = getEntriesForSlot(day, timeSlot); // Get all entries
-                    const hasBreak = !!breakMap[`${day}-${startTime}`];
+                    const entries = getEntriesForSlot(day, timeSlot);
+                    const breakData = breakMap[`${day}-${startTime}`];
 
                     return (
                       <td
                         key={`${day}-${slotIndex}`}
-                        className="px-4 py-4 text-center relative border border-gray-200 min-h-[100px] align-top" // Added align-top
+                        className="px-4 py-4 text-center relative border border-gray-200 min-h-[100px] align-top"
                       >
-                        {hasBreak ? (
+                        {breakData ? (
                           <div
                             className="relative cursor-pointer hover:bg-orange-50 hover:shadow-md p-2 rounded transition-all duration-200 group bg-orange-100 border-2 border-orange-500"
-                            onClick={() => handleBreakClick({ day, startTime })}
+                            onClick={() => handleBreakClick(breakData)}
                           >
                             <span className="text-orange-700 font-bold text-lg block">
                               🔗 BREAK
@@ -154,18 +144,15 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
                               Click to edit
                             </p>
                           </div>
-                        ) : entries.length > 0 ? ( // Check if array has entries
+                        ) : entries.length > 0 ? (
                           <div className="flex flex-col gap-2">
-                            {" "}
-                            {/* Wrapper for multiple entries */}
                             {entries.map((entry) => {
-                              // Map over all entries for this slot
                               const entryConflicts = getConflictsForEntry(
                                 entry._id
                               );
                               return (
                                 <div
-                                  key={entry._id} // Add a unique key
+                                  key={entry._id}
                                   className="relative cursor-pointer hover:bg-blue-50 hover:shadow-md p-2 rounded transition-all duration-200 group bg-blue-50 border-2 border-blue-500"
                                   onClick={() => handleEntryClick(entry)}
                                 >
@@ -183,7 +170,6 @@ export const WeeklyGrid = ({ schedule, conflicts = [], breaks = [] }) => {
                                   <div className="text-xs">
                                     <p className="font-bold text-blue-700">
                                       {entry.subjectCode?.subjectCode || "N/A"}
-                                      {/* Show the batch group */}
                                       <span
                                         className={`font-semibold ml-1 ${
                                           entry.batchGroup === "Full"

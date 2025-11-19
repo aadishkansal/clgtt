@@ -1,49 +1,43 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
 
 export const EditEntryModal = ({ isOpen, entry, onClose, onRefresh }) => {
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const navigate = useNavigate();
 
   if (!isOpen || !entry) {
     return null;
   }
 
   const handleEdit = () => {
-    console.log(" Edit entry:", entry._id);
-    // Navigate to edit page
-    window.location.href = `/timetable/edit/${entry.timetableId}`;
-  };
-
-const handleDelete = async () => {
-  setLoading(true);
-  try {
-    console.log("Deleting entry...");
-    console.log("Timetable ID:", entry.timetableId);
-    console.log("Entry Index:", entry.entryIndex);
-
-    // FIXED: Remove 'response' variable
-    await api.delete(`/timetable/${entry.timetableId}`, {
-      data: {
-        entryIndex: entry.entryIndex,
+    onClose();
+    // Pass the 'entry' data in state so the Edit Page can pre-fill the form
+    navigate(`/timetable/edit/${entry.timetableId}`, {
+      state: {
+        editMode: true,
+        entryData: entry,
       },
     });
+  };
 
-    console.log("âœ… Entry deleted successfully");
-    toast.success("âœ… Entry deleted successfully");
-
-    onClose();
-    setTimeout(() => {
-      onRefresh();
-    }, 500);
-  } catch (error) {
-    console.error("âŒ Delete error:", error.response?.data || error.message);
-    toast.error(error.response?.data?.message || "Failed to delete entry");
-  } finally {
-    setLoading(false);
-  }
-};
+  const handleDelete = async () => {
+    setLoading(true);
+    try {
+      await api.delete(`/timetable/${entry.timetableId}`, {
+        data: { entryIndex: entry.entryIndex },
+      });
+      toast.success("Entry deleted successfully");
+      onClose();
+      setTimeout(() => onRefresh(), 500);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to delete entry");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <>
@@ -64,14 +58,12 @@ const handleDelete = async () => {
         <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto transform transition-all">
           {/* Header */}
           <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-800">
-              Entry Details
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-800">Entry Details</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 text-3xl leading-none font-bold hover:bg-gray-100 w-8 h-8 rounded transition-colors"
             >
-              X 
+              ×
             </button>
           </div>
 
@@ -187,7 +179,7 @@ const handleDelete = async () => {
                 disabled={loading}
                 className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
               >
-               Edit
+                Edit
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -206,7 +198,6 @@ const handleDelete = async () => {
             </div>
           )}
 
-          {/* Info text */}
           <p className="text-xs text-gray-500 text-center mt-4">
             Click Edit to modify this entry
           </p>

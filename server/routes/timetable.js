@@ -6,6 +6,7 @@ import {
   createTimetableEntry,
   updateTimetableEntry,
   deleteTimetableEntry,
+  deleteTimetable, 
   deleteBreak,
   publishTimetable,
   downloadPDF,
@@ -28,12 +29,15 @@ router.get("/available-slots", getAvailableTimeSlots);
 router.post("/validate", validateTimetableEntry);
 router.post("/create", timetableValidator, validate, createTimetableEntry);
 
-// Individual timetable routes
+//  Route to delete the ENTIRE timetable (Document)
+router.delete("/:id/full", deleteTimetable);
+
+// Individual timetable routes (for specific entries)
 router
   .route("/:id")
   .get(getTimetableById)
   .put(updateTimetableEntry)
-  .delete(deleteTimetableEntry);
+  .delete(deleteTimetableEntry); // This deletes a single class entry
 
 // Break management routes
 router.delete("/:id/break/:breakId", deleteBreak);

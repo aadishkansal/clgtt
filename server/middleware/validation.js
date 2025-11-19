@@ -4,8 +4,6 @@ export const validate = (req, res, next) => {
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
-    console.log("âŒ Validation Errors:", errors.array());
-
     // Format errors for frontend
     const formattedErrors = {};
     errors.array().forEach((error) => {

@@ -13,11 +13,7 @@ export const EditBreakModal = ({ isOpen, breakItem, onClose, onRefresh }) => {
   const handleDelete = async () => {
     setLoading(true);
     try {
-
-
       await api.delete(`/timetable/break/${breakItem._id}`);
-
-
       toast.success("Break deleted successfully");
 
       onClose();
@@ -25,7 +21,6 @@ export const EditBreakModal = ({ isOpen, breakItem, onClose, onRefresh }) => {
         onRefresh();
       }, 500);
     } catch (error) {
-      console.error(" Delete error:", error.response?.data || error.message);
       toast.error(error.response?.data?.message || "Failed to delete break");
     } finally {
       setLoading(false);
@@ -51,15 +46,13 @@ export const EditBreakModal = ({ isOpen, breakItem, onClose, onRefresh }) => {
         <div className="bg-white rounded-lg shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto transform transition-all">
           {/* Header */}
           <div className="flex justify-between items-center mb-6 pb-4 border-b-2 border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-800">
-             Break Details
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-800">Break Details</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 text-3xl leading-none font-bold hover:bg-gray-100 w-8 h-8 rounded transition-colors"
-            > X 
+            >
+              X
             </button>
-
           </div>
 
           {/* Break Details */}
@@ -99,16 +92,14 @@ export const EditBreakModal = ({ isOpen, breakItem, onClose, onRefresh }) => {
               <p className="text-xs text-blue-600 font-bold uppercase tracking-wider">
                 Type
               </p>
-              <p className="text-lg font-bold text-blue-900 mt-1">
-                Break
-              </p>
+              <p className="text-lg font-bold text-blue-900 mt-1">Break</p>
             </div>
 
             {/* Info */}
             <div className="bg-blue-50 border border-blue-200 rounded p-4">
               <p className="text-sm text-blue-700">
-                This break is reserved and no classes can be scheduled
-                during this time.
+                This break is reserved and no classes can be scheduled during
+                this time.
               </p>
             </div>
           </div>

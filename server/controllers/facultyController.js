@@ -3,10 +3,7 @@ import Subject from "../models/Subject.js";
 
 export const getAllFaculty = async (req, res) => {
   try {
-    console.log("📚 Fetching all faculty...");
     const faculty = await Faculty.find().populate("subjects");
-
-    console.log(`✅ Found ${faculty.length} faculty members`);
 
     res.json({
       success: true,
@@ -14,7 +11,6 @@ export const getAllFaculty = async (req, res) => {
       faculty,
     });
   } catch (error) {
-    console.error("❌ Error fetching faculty:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching faculty",
@@ -45,8 +41,6 @@ export const getFacultyById = async (req, res, next) => {
 
 export const createFaculty = async (req, res, next) => {
   try {
-    console.log("📝 Creating faculty with ", req.body);
-
     const {
       name,
       facultyID,
@@ -91,8 +85,6 @@ export const createFaculty = async (req, res, next) => {
       subjects: subjects || [],
     });
 
-    console.log("✅ Faculty created:", faculty);
-
     await faculty.populate("subjects");
 
     res.status(201).json({
@@ -101,16 +93,12 @@ export const createFaculty = async (req, res, next) => {
       faculty,
     });
   } catch (error) {
-    console.error("❌ Create error:", error);
     next(error);
   }
 };
 
 export const updateFaculty = async (req, res, next) => {
   try {
-    console.log("📝 Updating faculty ID:", req.params.id);
-    console.log("📝 Update ", req.body);
-
     const {
       name,
       departments,
@@ -140,10 +128,7 @@ export const updateFaculty = async (req, res, next) => {
     if (typeof isActive !== "undefined") faculty.isActive = isActive;
     if (subjects) faculty.subjects = subjects;
 
-    console.log("💾 Saving faculty...");
     await faculty.save();
-
-    console.log("✅ Faculty saved:", faculty);
 
     await faculty.populate("subjects");
 
@@ -153,15 +138,12 @@ export const updateFaculty = async (req, res, next) => {
       faculty,
     });
   } catch (error) {
-    console.error("❌ Update error:", error);
     next(error);
   }
 };
 
 export const deleteFaculty = async (req, res, next) => {
   try {
-    console.log("🗑️ Deleting faculty ID:", req.params.id);
-
     const faculty = await Faculty.findById(req.params.id);
 
     if (!faculty) {
@@ -174,14 +156,11 @@ export const deleteFaculty = async (req, res, next) => {
     // Hard delete (remove from database)
     await Faculty.findByIdAndDelete(req.params.id);
 
-    console.log("✅ Faculty deleted successfully");
-
     res.status(200).json({
       success: true,
       message: "Faculty deleted successfully",
     });
   } catch (error) {
-    console.error("❌ Delete error:", error);
     next(error);
   }
 };

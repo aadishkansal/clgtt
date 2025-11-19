@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { AuthContext } from "./AuthContext";
 import { isTokenValid } from "../utils/helpers";
 
-console.log("%c✅ AuthProvider.jsx loaded", "color: purple; font-size: 14px;");
+
 
 export const AuthProvider = ({ children }) => {
   const [admin, setAdmin] = useState(null);

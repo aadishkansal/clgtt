@@ -5,6 +5,17 @@ import api from "../../utils/api";
 import { handleApiError } from "../../utils/helpers";
 import { toast } from "react-toastify";
 
+const DEPARTMENTS = [
+  "Computer Science & Engineering",
+  "Information Technology",
+  "Electronics & Communication",
+  "Electronics & Instrumentation",
+  "Electrical Engineering",
+  "Mechanical Engineering",
+  "Civil Engineering",
+  "Artificial Intelligence & DS",
+];
+
 export const FacultyForm = ({ faculty = null, onSuccess }) => {
   const [formData, setFormData] = useState({
     name: "",
@@ -20,24 +31,10 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [newDepartment, setNewDepartment] = useState("");
 
-  const commonDepartments = [
-    "Computer Science",
-    "Information Technology",
-    "Electronics",
-    "Electrical",
-    "Mechanical",
-    "Civil",
-    "Chemical",
-    "Mathematics",
-    "Physics",
-    "Chemistry",
-  ];
-
   useEffect(() => {
     loadSubjects();
 
     if (faculty) {
-      console.log("📝 Editing faculty:", faculty);
       setFormData({
         name: faculty.name || "",
         facultyID: faculty.facultyID || "",
@@ -55,8 +52,8 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
       const response = await api.get("/subjects");
       const subjectData = response.data?.data || response.data?.subjects || [];
       setSubjects(subjectData);
-    } catch (error) {
-      console.error("Failed to load subjects:", error);
+    } catch {
+      // Removed unused 'error' variable
       toast.error("Failed to load subjects");
     }
   };
@@ -132,16 +129,12 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
     setLoading(true);
 
     try {
-      console.log("📤 Submitting faculty ", formData);
-
       if (faculty) {
         await api.put(`/faculty/${faculty._id}`, formData);
         toast.success("Faculty updated successfully");
-        console.log("✅ Update successful");
       } else {
         await api.post("/faculty", formData);
         toast.success("Faculty created successfully");
-        console.log("✅ Create successful");
       }
 
       onSuccess();
@@ -156,7 +149,6 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
         subjects: [],
       });
     } catch (error) {
-      console.error("❌ Submit error:", error);
       toast.error(handleApiError(error));
     } finally {
       setLoading(false);
@@ -218,23 +210,23 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Departments <span className="text-red-500">*</span>
           <span className="text-gray-500 font-normal ml-2">
-            (Select all departments this faculty teaches in)
+            (Select all departments this faculty belongs to)
           </span>
         </label>
 
-        {/* Selected Departments */}
+        {/* Selected Departments Tags */}
         {formData.departments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2">
             {formData.departments.map((dept) => (
               <span
                 key={dept}
-                className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full"
+                className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium"
               >
                 {dept}
                 <button
                   type="button"
                   onClick={() => handleRemoveDepartment(dept)}
-                  className="hover:text-blue-900"
+                  className="hover:text-blue-900 font-bold"
                 >
                   ×
                 </button>
@@ -243,13 +235,17 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
           </div>
         )}
 
-        {/* Common Departments */}
+        {/* Department Checkboxes */}
         <div className="border border-gray-300 rounded-lg p-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-4">
-            {commonDepartments.map((dept) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
+            {DEPARTMENTS.map((dept) => (
               <label
                 key={dept}
-                className="flex items-center space-x-2 p-2 rounded hover:bg-gray-50 cursor-pointer"
+                className={`flex items-center space-x-2 p-2 rounded cursor-pointer transition-colors ${
+                  formData.departments?.includes(dept)
+                    ? "bg-blue-50 border border-blue-200"
+                    : "hover:bg-gray-50 border border-transparent"
+                }`}
               >
                 <input
                   type="checkbox"
@@ -262,10 +258,10 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
             ))}
           </div>
 
-          {/* Add Custom Department */}
+          {/* Add Custom Department Input */}
           <div className="border-t pt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Add Custom Department
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+              Other Department (e.g., Mathematics, Humanities)
             </label>
             <div className="flex gap-2">
               <input
@@ -276,8 +272,8 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
                   e.key === "Enter" &&
                   (e.preventDefault(), handleAddCustomDepartment())
                 }
-                placeholder="Enter department name"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Type department name"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               />
               <Button
                 type="button"
@@ -310,7 +306,11 @@ export const FacultyForm = ({ faculty = null, onSuccess }) => {
               {subjects.map((subject) => (
                 <label
                   key={subject._id}
-                  className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer border border-gray-200"
+                  className={`flex items-center space-x-3 p-3 rounded-lg cursor-pointer border transition-all ${
+                    formData.subjects?.includes(subject._id)
+                      ? "bg-blue-50 border-blue-300"
+                      : "hover:bg-gray-50 border-gray-200"
+                  }`}
                 >
                   <input
                     type="checkbox"

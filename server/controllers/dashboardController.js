@@ -35,8 +35,8 @@ export const getDashboardData = async (req, res, next) => {
         totalConflicts,
         criticalConflicts,
       },
-      data: timetables, // âœ… Unified response format
-      timetables, // âœ… Keep for backward compatibility
+      data: timetables,
+      timetables,
     });
   } catch (error) {
     next(error);
@@ -56,11 +56,7 @@ export const getYearDashboard = async (req, res, next) => {
       .populate("schedule.facultyID", "name facultyID")
       .populate("schedule.classroomID", "roomNumber block capacity type")
       .populate("schedule.timeslotID", "day startTime endTime periodNumber")
-      .populate("breaks.timeslotID", "day startTime endTime periodNumber"); // <-- ✅ ADD THIS LINE
-
-    console.log(
-      `Found ${timetables.length} timetables for Year ${year}, Semester ${semester}`
-    );
+      .populate("breaks.timeslotID", "day startTime endTime periodNumber");
 
     res.status(200).json({
       success: true,
@@ -69,7 +65,6 @@ export const getYearDashboard = async (req, res, next) => {
       timetables,
     });
   } catch (error) {
-    console.error("Error fetching year dashboard:", error);
     next(error);
   }
 };
@@ -95,8 +90,8 @@ export const getFacultyWorkload = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: workloadData, // âœ… Unified response format
-      workloadData, // âœ… Keep for backward compatibility
+      data: workloadData,
+      workloadData,
     });
   } catch (error) {
     next(error);
@@ -132,8 +127,8 @@ export const getClassroomUtilization = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: utilizationData, // âœ… Unified response format
-      utilizationData, // âœ… Keep for backward compatibility
+      data: utilizationData,
+      utilizationData,
     });
   } catch (error) {
     next(error);

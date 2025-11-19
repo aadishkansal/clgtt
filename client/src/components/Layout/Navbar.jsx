@@ -16,9 +16,9 @@ export const Navbar = () => {
       <div className="flex justify-between items-center px-6 py-4">
         <div>
           <h1 className="text-2xl font-bold text-blue-600">
-            College Timetable
+            Institute of Engineering & Technology
           </h1>
-          <p className="text-gray-600 text-sm">Management System</p>
+          <p className="text-gray-600 text-sm">Time Table Management System</p>
         </div>
 
         <div className="flex items-center gap-4">

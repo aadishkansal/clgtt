@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"; // 1. Import hooks
+import { useState, useRef, useEffect } from "react";
 import { SubjectForm } from "../components/Subject/SubjectForm";
 import { SubjectList } from "../components/Subject/SubjectList";
 import { Button } from "../components/Common/Button";
@@ -8,7 +8,6 @@ export const SubjectManagement = () => {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [refresh, setRefresh] = useState(false);
 
-  // 2. Create the ref
   const formRef = useRef(null);
 
   const handleEdit = (subject) => {
@@ -19,7 +18,7 @@ export const SubjectManagement = () => {
   const handleSuccess = () => {
     setShowForm(false);
     setSelectedSubject(null);
-    setRefresh(!refresh); // This will trigger the SubjectList to refetch
+    setRefresh(!refresh);
   };
 
   const handleAddNew = () => {
@@ -27,12 +26,18 @@ export const SubjectManagement = () => {
     setShowForm(true);
   };
 
-  // 3. Add useEffect to scroll when form visibility changes
+
   useEffect(() => {
-    if (showForm) {
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (showForm && formRef.current) {
+      // The timeout ensures the DOM has painted the form before scrolling starts
+      setTimeout(() => {
+        formRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start", // You can change this to 'center' if 'start' is hidden by a navbar
+        });
+      }, 100);
     }
-  }, [showForm]); // Run this effect when showForm changes
+  }, [showForm, selectedSubject]); // Trigger when form opens OR when subject changes
 
   return (
     <div className="space-y-6">
@@ -51,8 +56,9 @@ export const SubjectManagement = () => {
         </Button>
       </div>
 
-      {/* 4. Attach the ref to the form's wrapper */}
-      <div ref={formRef}>
+      {/* The ref is attached here to capture the scroll target */}
+      <div ref={formRef} className="scroll-mt-20">
+        {/* Added scroll-mt-20 (scroll margin top) to give some breathing room when scrolling */}
         {showForm && (
           <SubjectForm subject={selectedSubject} onSuccess={handleSuccess} />
         )}

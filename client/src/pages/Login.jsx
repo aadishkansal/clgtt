@@ -11,22 +11,10 @@ export const Login = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  console.log(
-    "🔑 Login page - Email:",
-    email,
-    "Password:",
-    password ? "***" : "(empty)"
-  );
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    console.log("\n🚀 ========== LOGIN ATTEMPT ==========");
-    console.log("📧 Email:", email);
-    console.log("🔒 Password:", password ? "Entered" : "EMPTY");
-
     if (!email || !password) {
-      console.error("❌ Validation failed!");
       toast.error("Please enter both email and password");
       return;
     }
@@ -34,20 +22,13 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      console.log("🌐 Calling API...");
       const response = await api.post("/auth/login", { email, password });
-
-      console.log("✅ Login successful!", response.data);
-
       const { token, admin } = response.data;
-      login(token, admin);
 
+      login(token, admin);
       toast.success("Login successful!");
       navigate("/");
     } catch (error) {
-      console.error("❌ Login error:", error);
-      console.error("Response:", error.response?.data);
-
       const message =
         error.response?.data?.message || error.message || "Login failed";
       toast.error(message);
@@ -61,9 +42,9 @@ export const Login = () => {
       <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-600 mb-2">
-            College Timetable
+            Institute of Engineering & Technology
           </h1>
-          <p className="text-gray-600">Management System</p>
+          <p className="text-gray-600">College Timetable Management System</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -75,10 +56,7 @@ export const Login = () => {
             <input
               type="email"
               value={email}
-              onChange={(e) => {
-                console.log("✏️ Email changed:", e.target.value);
-                setEmail(e.target.value);
-              }}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@college.edu"
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -93,13 +71,7 @@ export const Login = () => {
             <input
               type="password"
               value={password}
-              onChange={(e) => {
-                console.log(
-                  "✏️ Password changed:",
-                  e.target.value ? "***" : "(empty)"
-                );
-                setPassword(e.target.value);
-              }}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"

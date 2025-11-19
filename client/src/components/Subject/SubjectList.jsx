@@ -14,6 +14,7 @@ const SUBJECT_TYPES = [
 export const SubjectList = ({ onEdit }) => {
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState(""); // Added Search State
 
   useEffect(() => {
     loadSubjects();
@@ -51,6 +52,19 @@ export const SubjectList = ({ onEdit }) => {
     return l + t + p;
   };
 
+  // Filter Logic
+  const filteredSubjects = subjects.filter((subject) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      subject.name.toLowerCase().includes(term) ||
+      subject.subjectCode.toLowerCase().includes(term) ||
+      (subject.department && subject.department.toLowerCase().includes(term)) ||
+      subject.year.toString().includes(term) ||
+      subject.semester.toString().includes(term)
+    );
+  });
+
   if (loading) return <Loader />;
 
   if (!subjects || subjects.length === 0) {
@@ -83,92 +97,137 @@ export const SubjectList = ({ onEdit }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-x-auto">
-      <table className="w-full">
-        <thead className="bg-gray-100 border-b-2 border-gray-300">
-          <tr>
-            <th className="px-6 py-4 text-left font-semibold">Code</th>
-            <th className="px-6 py-4 text-left font-semibold">Name</th>
-            <th className="px-6 py-4 text-left font-semibold">Year</th>
-            <th className="px-6 py-4 text-left font-semibold">Semester</th>
-            <th className="px-6 py-4 text-left font-semibold">Type(s)</th>
-            <th className="px-6 py-4 text-left font-semibold">
-              Credits (L-T-P)
-            </th>
-            <th className="px-6 py-4 text-center font-semibold">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {subjects.map((subject) => (
-            <tr
-              key={subject._id}
-              className="border-b border-gray-200 hover:bg-gray-50"
+    <div className="bg-white rounded-lg shadow-md">
+      {/* Search Bar */}
+      <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg
+              className="h-5 w-5 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              <td className="px-6 py-4 font-medium text-blue-600">
-                {subject.subjectCode}
-              </td>
-              <td className="px-6 py-4">{subject.name}</td>
-              <td className="px-6 py-4 text-center">{subject.year}</td>
-              <td className="px-6 py-4 text-center">{subject.semester}</td>
-              <td className="px-6 py-4">
-                <div className="flex flex-wrap gap-1">
-                  {Array.isArray(subject.type) ? (
-                    subject.type.map((type) => (
-                      <span
-                        key={type}
-                        className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
-                      >
-                        {SUBJECT_TYPES.find((t) => t.value === type)?.label ||
-                          type}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
-                      {SUBJECT_TYPES.find((t) => t.value === subject.type)
-                        ?.label || subject.type}
-                    </span>
-                  )}
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="text-sm">
-                  <div className="font-semibold">
-                    {getTotalCredits(subject)} total credits
-                  </div>
-                  <div className="text-gray-600 text-xs mt-1">
-                    {subject.lectureCredits > 0 && (
-                      <div>L: {subject.lectureCredits}</div>
-                    )}
-                    {subject.tutorialCredits > 0 && (
-                      <div>T: {subject.tutorialCredits}</div>
-                    )}
-                    {subject.practicalCredits > 0 && (
-                      <div>P: {subject.practicalCredits}</div>
-                    )}
-                  </div>
-                </div>
-              </td>
-              <td className="px-6 py-4 text-center">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onEdit(subject)}
-                  className="mr-2"
-                >
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => handleDelete(subject._id)}
-                >
-                  Delete
-                </Button>
-              </td>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <input
+            type="text"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:border-blue-300 focus:ring focus:ring-blue-200 sm:text-sm transition duration-150 ease-in-out"
+            placeholder="Search by name, code, dept, year..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="text-sm text-gray-500 hidden sm:block">
+          Showing {filteredSubjects.length} of {subjects.length}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-100 border-b-2 border-gray-300">
+            <tr>
+              <th className="px-6 py-4 text-left font-semibold">Code</th>
+              <th className="px-6 py-4 text-left font-semibold">Name</th>
+              <th className="px-6 py-4 text-left font-semibold">Department</th>
+              <th className="px-6 py-4 text-left font-semibold">Year</th>
+              <th className="px-6 py-4 text-left font-semibold">Semester</th>
+              <th className="px-6 py-4 text-left font-semibold">Type(s)</th>
+              <th className="px-6 py-4 text-left font-semibold">
+                Credits (L-T-P)
+              </th>
+              <th className="px-6 py-4 text-center font-semibold">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filteredSubjects.length > 0 ? (
+              filteredSubjects.map((subject) => (
+                <tr
+                  key={subject._id}
+                  className="border-b border-gray-200 hover:bg-gray-50"
+                >
+                  <td className="px-6 py-4 font-medium text-blue-600">
+                    {subject.subjectCode}
+                  </td>
+                  <td className="px-6 py-4">{subject.name}</td>
+                  <td className="px-6 py-4 text-gray-600">
+                    {subject.department || "-"}
+                  </td>
+                  <td className="px-6 py-4 text-center">{subject.year}</td>
+                  <td className="px-6 py-4 text-center">{subject.semester}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {Array.isArray(subject.type) ? (
+                        subject.type.map((type) => (
+                          <span
+                            key={type}
+                            className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
+                          >
+                            {SUBJECT_TYPES.find((t) => t.value === type)
+                              ?.label || type}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+                          {SUBJECT_TYPES.find((t) => t.value === subject.type)
+                            ?.label || subject.type}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm">
+                      <div className="font-semibold">
+                        {getTotalCredits(subject)} total credits
+                      </div>
+                      <div className="text-gray-600 text-xs mt-1">
+                        {subject.lectureCredits > 0 && (
+                          <div>L: {subject.lectureCredits}</div>
+                        )}
+                        {subject.tutorialCredits > 0 && (
+                          <div>T: {subject.tutorialCredits}</div>
+                        )}
+                        {subject.practicalCredits > 0 && (
+                          <div>P: {subject.practicalCredits}</div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => onEdit(subject)}
+                      className="mr-2"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleDelete(subject._id)}
+                    >
+                      Delete
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                  No subjects match your search "{searchTerm}"
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

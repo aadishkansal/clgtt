@@ -6,11 +6,8 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("🔐 Login attempt:", email);
-
     // Validation
     if (!email || !password) {
-      console.log("❌ Validation failed: Missing email or password");
       return res.status(400).json({
         success: false,
         message: "Email and password are required",
@@ -21,22 +18,16 @@ export const login = async (req, res) => {
     const admin = await Admin.findOne({ email });
 
     if (!admin) {
-      console.log("❌ Admin not found:", email);
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
       });
     }
 
-    console.log("✅ Admin found:", admin.email);
-    console.log("📝 Stored password hash:", admin.password);
-
     // Compare password
     const isPasswordValid = await bcrypt.compare(password, admin.password);
-    console.log("🔍 Password comparison result:", isPasswordValid);
 
     if (!isPasswordValid) {
-      console.log("❌ Password mismatch");
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
@@ -50,8 +41,6 @@ export const login = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRE || "8h" }
     );
 
-    console.log("✅ Login successful, token generated");
-
     res.json({
       success: true,
       token,
@@ -63,7 +52,6 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Login error:", error);
     res.status(500).json({
       success: false,
       message: "Server error during login",
@@ -121,7 +109,6 @@ export const register = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Register error:", error);
     res.status(500).json({
       success: false,
       message: "Server error during registration",
@@ -145,7 +132,6 @@ export const getMe = async (req, res) => {
       admin,
     });
   } catch (error) {
-    console.error("GetMe error:", error);
     res.status(500).json({
       success: false,
       message: "Server error",

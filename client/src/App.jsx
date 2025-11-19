@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { Loader } from "./components/Common/Loader";
 import { Navbar } from "./components/Layout/Navbar";
@@ -12,28 +12,19 @@ import { FacultyManagement } from "./pages/FacultyManagement";
 import { SubjectManagement } from "./pages/SubjectManagement";
 import { ClassroomManagement } from "./pages/ClassroomManagement";
 
-console.log(
-  "%c✅ App.jsx loaded",
-  "color: blue; font-size: 14px; font-weight: bold;"
-);
+import { TimetableForm } from "./components/Timetable/TimetableForm";
+import { EditTimetable } from "./pages/EditTimetable";
 
 function App() {
-  console.log("%c🔄 App component rendering", "color: orange");
-
   const { isAuthenticated, loading } = useAuth();
 
-  console.log("🔐 Auth State:", { isAuthenticated, loading });
-
   if (loading) {
-    console.log("⏳ Loading...");
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader size="lg" text="Loading..." />
       </div>
     );
   }
-
-  console.log("✅ Rendering Routes. isAuthenticated:", isAuthenticated);
 
   return (
     <Routes>
@@ -53,7 +44,6 @@ function App() {
 }
 
 function ProtectedLayout() {
-  console.log("%c🛡️ ProtectedLayout rendering", "color: green");
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar />
@@ -62,7 +52,13 @@ function ProtectedLayout() {
         <main className="flex-1 overflow-y-auto p-6">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+
+            {/* Timetable Routes */}
             <Route path="/timetable" element={<TimetableManagement />} />
+            <Route path="/timetable/create" element={<TimetableForm />} />
+            <Route path="/timetable/edit/:id" element={<EditTimetable />} />
+
+            {/* Management Routes */}
             <Route path="/faculty" element={<FacultyManagement />} />
             <Route path="/subjects" element={<SubjectManagement />} />
             <Route path="/classrooms" element={<ClassroomManagement />} />

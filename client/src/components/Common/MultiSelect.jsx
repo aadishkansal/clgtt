@@ -27,16 +27,10 @@ export const MultiSelect = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // âœ… Fixed: Ensure value is always an array
+  // Ensure value is always an array
   const safeValue = Array.isArray(value) ? value : [];
 
   const handleToggle = (optionValue) => {
-    console.log(`MULTISELECT TOGGLE - ${name}:`, {
-      optionValue,
-      currentValue: safeValue,
-      isIncluded: safeValue.includes(optionValue),
-    });
-
     let newValue;
     if (safeValue.includes(optionValue)) {
       newValue = safeValue.filter((v) => v !== optionValue);
@@ -44,9 +38,7 @@ export const MultiSelect = ({
       newValue = [...safeValue, optionValue];
     }
 
-    console.log(`MULTISELECT NEW VALUE - ${name}:`, newValue);
-
-    // âœ… IMPORTANT: Call onChange with proper format
+    // IMPORTANT: Call onChange with proper format
     if (onChange) {
       onChange({
         target: {
@@ -80,7 +72,7 @@ export const MultiSelect = ({
           disabled={disabled}
           className={`w-full px-4 py-2 text-left rounded-md shadow-sm focus:outline-none focus:ring-2 transition-colors ${
             highlightConflict
-              ? "border-2 border-red-500 bg-red-50 focus:ring-red-500"
+              ? "border-2 border-gray-200 focus:ring-blue-500 "
               : "border border-gray-300 bg-white focus:ring-blue-500 hover:border-blue-400"
           } disabled:bg-gray-100 disabled:cursor-not-allowed cursor-pointer`}
         >

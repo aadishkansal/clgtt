@@ -8,14 +8,12 @@ export const FacultyManagement = () => {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleSuccess = () => {
-    console.log("✅ Success - Reloading faculty list");
     setShowForm(false);
     setSelectedFaculty(null);
     setRefreshKey((prev) => prev + 1);
   };
 
   const handleEdit = (faculty) => {
-    console.log("📝 Editing faculty:", faculty);
     setSelectedFaculty(faculty);
     setShowForm(true);
   };
